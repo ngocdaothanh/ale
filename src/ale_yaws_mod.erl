@@ -41,23 +41,40 @@ out(Arg) ->
                     c_application:error_404(Arg, Uri);
 
                 {Controller, Action, Args} ->
-                    View = controller_to_view(Controller, Action),
-                    ale:put(ale, view, View),
+                    Args2 = [Arg | Args],
 
-                    apply(Controller, Action, [Arg | Args]),
+                    Halted = lists:any(
+                        fun(Module) ->
+                            case erlang:function_exported(Module, before_filter, 3) of
+                                true  -> Module:before_filter(Controller, Action, Args2);
+                                false -> false
+                            end
+                        end,
+                        [c_application, Controller]
+                    ),
 
-                    case ale:get(ale, view) of
-                        undefined -> ok;    % Layout is not called if there is no view
+                    case Halted of
+                        true -> ok;
 
-                        View2 ->
-                            Content = View2:render(),
-                            case ale:get(ale, layout) of
-                                undefined -> ale:put(yaws, ehtml, Content);
+                        false ->
+                            View = controller_to_view(Controller, Action),
+                            ale:put(ale, view, View),
 
-                                Layout ->
-                                    ale:put(ale, content_for_layout, Content),
-                                    Content2 = Layout:render(),
-                                    ale:put(yaws, ehtml, Content2)
+                            apply(Controller, Action, Args2),
+
+                            case ale:get(ale, view) of
+                                undefined -> ok;    % Layout is not called if there is no view
+
+                                View2 ->
+                                    Content = View2:render(),
+                                    case ale:get(ale, layout) of
+                                        undefined -> ale:put(yaws, ehtml, Content);
+
+                                        Layout ->
+                                            ale:put(ale, content_for_layout, Content),
+                                            Content2 = Layout:render(),
+                                            ale:put(yaws, ehtml, Content2)
+                                    end
                             end
                     end
             catch

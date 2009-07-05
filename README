@@ -70,6 +70,12 @@ Call ale:script(Script) to add Script to the process dictionary. Near the end of
 your layout, call ale:script(). ale:script/1 can be called many times to add
 many script fragments.
 
+== Before Filter
+
+c_application or any controller can define
+before_filter(Controller, Action, Args). To halt the processing chain, this
+function should return true.
+
 == Session
 
 For simplicity, only in-coookie session is supported.
