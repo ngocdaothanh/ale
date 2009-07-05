@@ -2,8 +2,7 @@
 
 -compile(export_all).
 
--include_lib("yaws/include/yaws.hrl").
--include_lib("yaws/include/yaws_api.hrl").
+-include("ale.hrl").
 
 %-------------------------------------------------------------------------------
 % Called by Yaws as configured in yaws.conf
@@ -116,15 +115,15 @@ rest_method(Arg) ->
 
         'POST' ->
             case yaws_api:postvar(Arg, "_method") of
-                undefined      -> post;
                 {ok, "put"}    -> put;
-                {ok, "delete"} -> delete
+                {ok, "delete"} -> delete;
+                _              -> post
             end
     end.
 
 %-------------------------------------------------------------------------------
 
-%% Converts c_hello, show to v_hello_show
+%% Converts c_hello and show to v_hello_show
 controller_to_view(Controller, Action) ->
     [$c, $_ | Base] = atom_to_list(Controller),
     list_to_atom("v_" ++ Base ++ "_" ++ atom_to_list(Action)).
