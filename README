@@ -27,15 +27,6 @@ Fixed parts are in lower case, variable parts are captitalized.
 
 Function names are used so that filters can used their names.
 
-== Controllers and Actions
-
-An action is a Yaws' out/1 with extra arguments defined in routes/0. A
-controller is a collection of related actions.
-
-== Views
-
-You must explicitly call views.
-
 == controller_application
 
 This controller defines common functionalities for all other controllers:
@@ -43,25 +34,41 @@ This controller defines common functionalities for all other controllers:
 * Layout
 * Filters
 
-== Shared variables
+== Order of Function Calling
 
-ale:put(app, Name, Value)
-
-== Template
-
-ale:render()
+Before filters -> Action -> View -> Layout.
 
 == Action
 
-For convinience, result is not forced to be the last line. Because each request
-is processed by a separate process, an action uses BIF "put" to put things to
-the process dictionary. The framework will collect them and build the response.
+Each request is processed by a separate process. For convinience, output to Yaws
+is not forced to be the last line of your action. Use ale:put/3-5 to put things
+to namespaces in the process dictionary. Things in the "yaws" namespace will be
+collected into a list and sent to Yaws.
 
+== Views
 
+If your controller is c_x and action is y, v_x_y:render/0 will be called. Your
+actions should call ale:put(app, Key, Thing) to put things to the "app"
+namespace, ale:get(app, Key) in your views to get them.
+
+If you want to use a view other than the default view, in your action call
+ale:put(ale, view, ViewModule).
+
+If there is no default view or the specified view does not exist, no view will
+be called. If you do not want to use a view, just don't create the default view,
+or call ale:erase(ale, view). In this case layout will also not be called.
 
 == Layout
 
+To output your view with a layout, call ale:put(ale, layout, LayoutModule).
+LayoutModule:render/0 will be called. To get the rendered view, in your layout
+call ale:get(ale, content_for_layout).
 
+== JavaScript
+
+Call ale:script(Script) to add Script to the process dictionary. Near the end of
+your layout, call ale:script(). ale:script/1 can be called many times to add
+many script fragments.
 
 == Session
 

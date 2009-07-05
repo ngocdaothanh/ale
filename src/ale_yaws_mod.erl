@@ -25,7 +25,7 @@ start(SC) ->
 
     yaws_api:setconf(GC, [SCs2]),
 
-    controller_application:start(SC2).
+    c_application:start(SC2).
 
 out(Arg) ->
     Uri = Arg#arg.appmoddata,
@@ -37,11 +37,30 @@ out(Arg) ->
 
         _ ->
             RestMethod = rest_method(Arg),
-            try ale_routes:route_uri(Arg, RestMethod, Uri) of
+            try ale_routes:route_uri(RestMethod, Uri) of
                 no_route ->
-                    controller_application:error_404(Arg, Uri);
+                    c_application:error_404(Arg, Uri);
 
-                Any -> Any
+                {Controller, Action, Args} ->
+                    View = controller_to_view(Controller, Action),
+                    ale:put(ale, view, View),
+
+                    apply(Controller, Action, [Arg | Args]),
+
+                    case ale:get(ale, view) of
+                        undefined -> ok;    % Layout is not called if there is no view
+
+                        View2 ->
+                            Content = View2:render(),
+                            case ale:get(ale, layout) of
+                                undefined -> ale:put(yaws, ehtml, Content);
+
+                                Layout ->
+                                    ale:put(ale, content_for_layout, Content),
+                                    Content2 = Layout:render(),
+                                    ale:put(yaws, ehtml, Content2)
+                            end
+                    end
             catch
                 Type : Reason ->
                     error_logger:error_report([
@@ -51,13 +70,15 @@ out(Arg) ->
 
                     % Type and Reason arguments are more convenient than those
                     % of Yaws' errormod_crash
-                    controller_application:error_500(Arg, Type, Reason)
-            end
+                    c_application:error_500(Arg, Type, Reason)
+            end,
+            ale:get(yaws)
     end.
 
 out404(Arg, _GC, _SC) ->
     Uri = Arg#arg.appmoddata,
-    controller_application:error_404(Arg, Uri).
+    c_application:error_404(Arg, Uri),
+    ale:get(yaws).
 
 %-------------------------------------------------------------------------------
 
@@ -101,3 +122,9 @@ rest_method(Arg) ->
             end
     end.
 
+%-------------------------------------------------------------------------------
+
+%% Converts c_hello, show to v_hello_show
+controller_to_view(Controller, Action) ->
+    [$c, $_ | Base] = atom_to_list(Controller),
+    list_to_atom("v_" ++ Base ++ "_" ++ atom_to_list(Action)).

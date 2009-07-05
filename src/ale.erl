@@ -11,9 +11,9 @@ sync() -> make:all([load]).
 %% Each request has its own processing process. If you want to share variables
 %% across functions, you can put them to the process dictionary using put/3-5
 %% and get/1, 2.
-put(Namespace, Key, Value)                  -> put(?KEY(Namespace, Key), Value).
-put(Namespace, Key, Value1, Value2)         -> put(?KEY(Namespace, Key), {Value1, Value2}).
-put(Namespace, Key, Value1, Value2, Value3) -> put(?KEY(Namespace, Key), {Value1, Value2, Value3}).
+put(Namespace, Key, Value)                  -> erlang:put(?KEY(Namespace, Key), Value).
+put(Namespace, Key, Value1, Value2)         -> erlang:put(?KEY(Namespace, Key), {Value1, Value2}).
+put(Namespace, Key, Value1, Value2, Value3) -> erlang:put(?KEY(Namespace, Key), {Value1, Value2, Value3}).
 
 get(Namespace, Key) -> erlang:get(?KEY(Namespace, Key)).
 
@@ -33,5 +33,19 @@ get(Namespace) ->
                                          ->                                  Acc
         end,
         [],
-        get()
+        erlang:get()
     ).
+
+erase(Namespace, Key) -> erlang:erase(?KEY(Namespace, Key)).
+
+script(Script) ->
+    case get(ale, script) of
+        undefined -> put(ale, script, Script);
+        IoList    -> put(ale, script, [IoList, Script])
+    end.
+
+script() ->
+    case get(ale, script) of
+        undefined -> "";
+        IoList    -> IoList
+    end.
