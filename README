@@ -1,0 +1,74 @@
+Ale is a thin layer above Yaws to make web development with Yaws easier. It
+provides:
+* Sinatra-like routes (http://github.com/sinatra/sinatra)
+* Gettext
+* Some other utilities and conventions
+
+== Create new project
+
+Yaws 1.83
+
+== Routes
+
+A route maps method and URI to controller and action. Routes are defined in
+controllers.
+
+routes() -> [
+	get,    "articles",         index,
+	get,    "articles/Id",      show,
+	get,    "articles/new",     new,
+	post,   "articles",         create,
+	get,    "articles/Id/edit", edit,
+	put,    "articles/Id",      update,
+	delete, "articles/Id",      delete
+].
+
+Fixed parts are in lower case, variable parts are captitalized.
+
+Function names are used so that filters can used their names.
+
+== Controllers and Actions
+
+An action is a Yaws' out/1 with extra arguments defined in routes/0. A
+controller is a collection of related actions.
+
+== Views
+
+You must explicitly call views.
+
+== controller_application
+
+This controller defines common functionalities for all other controllers:
+* error_404 and error_500
+* Layout
+* Filters
+
+== Shared variables
+
+ale:put(app, Name, Value)
+
+== Template
+
+ale:render()
+
+== Action
+
+For convinience, result is not forced to be the last line. Because each request
+is processed by a separate process, an action uses BIF "put" to put things to
+the process dictionary. The framework will collect them and build the response.
+
+
+
+== Layout
+
+
+
+== Session
+
+For simplicity, only in-coookie session is supported.
+
+== Tips
+
+When developing, to compile and reload code after a change, from EShell run
+ale:sync()., it will call make:all([load]), which runs Emakefile to compile then
+reload. make is a standard module of Erlang.

@@ -1,0 +1,1 @@
+-define(T(S), ale_i18n:t(S)).
