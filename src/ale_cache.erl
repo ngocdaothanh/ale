@@ -27,7 +27,9 @@ cache(Key, Fun, Options) ->
     case whereis(ale_cache_server) of
         undefined ->
             case whereis(merle) of
-                undefined -> Fun();
+                undefined ->
+                    error_logger:error_msg("Cache server not running"),
+                    Fun();
 
                 _ ->
                     case merle:getkey(Key) of
