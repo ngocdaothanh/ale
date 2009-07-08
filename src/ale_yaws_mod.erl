@@ -28,7 +28,7 @@ out(Arg) ->
             % Errors are not cached
             Method = rest_method(Arg),
             case ale_routes:route_uri(Method, Uri) of
-                no_route -> c_application:error_404(Arg, Uri);
+                no_route -> c_application:error_404(Uri);
 
                 {Controller, Action, Args} ->
                     try
@@ -120,20 +120,12 @@ init(SC) ->
         permanent, brutal_kill, worker, [c_application]
     },
 
-    ChildSpecs = case proplists:get_value("memcached", SC#sconf.opaque) of
-        undefined -> [AppSpec];
+    CacheSpec = {
+        ale_cache, {ale_cache, start_link, [SC]},
+        permanent, brutal_kill, worker, [ale_cache]
+    },
 
-        HostPort ->
-            [Host, Port] = string:tokens(HostPort, ":"),
-            Port2 = list_to_integer(Port),
-            MerleSpec = {
-                merle, {merle, connect, [Host, Port2]},
-                permanent, brutal_kill, worker, [merle]
-            },
-            [AppSpec, MerleSpec]
-    end,
-
-    {ok, {{one_for_one, ?MAX_R, ?MAX_T}, ChildSpecs}}.
+    {ok, {{one_for_one, ?MAX_R, ?MAX_T}, [AppSpec, CacheSpec]}}.
 
 %-------------------------------------------------------------------------------
 
@@ -154,65 +146,94 @@ rest_method(Arg) ->
             end
     end.
 
+% FIXME:
+% currently cache only works if there is a view to render.
+
 handle_request1(Method, Uri, Controller, Action, Arg, Args) ->
-    PageCached = page_cached(Controller, Action),
-    case PageCached of
+    case page_cached(Controller, Action) of
         true ->
-            case merle:getkey(Uri) of
-                undefined ->
-                    error_logger:info_msg("Cache Miss: ~s", [Uri]),
-                    ale:ale(page_cached, PageCached),
-                    handle_request2(Method, Uri, Controller, Action, Arg, Args);
+            Html = ale:cache(Uri, fun() ->
+                handle_request2(Method, Uri, Controller, Action, Arg, Args)
+            end),
+            ale:yaws(html, Html);
 
-                Html ->
-                    error_logger:info_msg("Cache Hit: ~s", [Uri]),
-                    ale:yaws(html, Html)
-            end;
-
-        false ->
-            ale:ale(page_cached, PageCached),
-            handle_request2(Method, Uri, Controller, Action, Arg, Args)
+        false -> handle_request2(Method, Uri, Controller, Action, Arg, Args)
     end.
 
+%% Returns HTML if the request is not halted by a before filter or action cached.
 handle_request2(Method, Uri, Controller, Action, Arg, Args) ->
     case run_before_filters(Controller, Action, Arg, Args) of
-        true -> ok;
+        true -> ok;    % Can't be page cached because halted by a before filter
 
         false ->
-            View = controller_to_view(Controller, Action),
-            ale:view(View),
+            case action_cached_with_layout(Controller, Action) of
+                true ->
+                    Html = ale:cache(Uri, fun() ->
+                        handle_request3(Method, Uri, Controller, Action, Arg, Args)
+                    end),
+                    ale:yaws(html, Html);    % Can't be page cached because action cached
 
-            apply(Controller, Action, [Arg | Args]),
-
-            case ale:view() of
-                undefined -> ok;    % Layout is not called if there is no view
-
-                View2 ->
-                    Content = View2:render(),
-                    Content2 = case ale:layout() of
-                        undefined -> Content;
-
-                        Layout ->
-                            ale:content_for_layout(Content),
-                            Layout:render()
-                    end,
-
-                    Html = yaws_api:ehtml_expand(Content2),
-                    case ale:ale(page_cached) of
-                        true ->
-                            error_logger:info_msg("Cache Write: ~s", [Uri]),
-                            merle:set(Uri, Html);
-
-                        false -> ok
-                    end,
-                    ale:yaws(html, Html)
+                false -> handle_request3(Method, Uri, Controller, Action, Arg, Args)
             end
+    end.
+
+%% Returns HTML if there is a view to render.
+handle_request3(Method, Uri, Controller, Action, Arg, Args) ->
+    Html = case action_cached_without_layout(Controller, Action) of
+        true ->
+            ale:cache(Uri, fun() ->
+                handle_request4(Method, Uri, Controller, Action, Arg, Args)
+            end);
+
+        false ->
+            handle_request4(Method, Uri, Controller, Action, Arg, Args)
+    end,
+
+    Html2 = case ale:layout() of
+        undefined -> Html;
+
+        Layout ->
+            ale:content_for_layout(Html),
+            Ehtml = Layout:render(),
+            yaws_api:ehtml_expand(Ehtml)
+    end,
+
+    ale:yaws(html, Html2),
+    Html2.
+
+%% Returns HTML if there is a view to render.
+handle_request4(Method, Uri, Controller, Action, Arg, Args) ->
+    View = controller_to_view(Controller, Action),
+    ale:view(View),
+
+    apply(Controller, Action, [Arg | Args]),
+
+    case ale:view() of
+        undefined -> ok;    % Layout is not called if there is no view
+
+        View2 ->
+            Ehtml = View2:render(),
+            yaws_api:ehtml_expand(Ehtml)
     end.
 
 page_cached(Controller, Action) ->
     code:ensure_loaded(Controller),
     case erlang:function_exported(Controller, cached_pages, 0) of
         true  -> lists:member(Action, Controller:cached_pages());
+        false -> false
+    end.
+
+action_cached_with_layout(Controller, Action) ->
+    code:ensure_loaded(Controller),
+    case erlang:function_exported(Controller, cached_actions_with_layout, 0) of
+        true  -> lists:member(Action, Controller:cached_actions_with_layout());
+        false -> false
+    end.
+
+action_cached_without_layout(Controller, Action) ->
+    code:ensure_loaded(Controller),
+    case erlang:function_exported(Controller, cached_actions_without_layout, 0) of
+        true  -> lists:member(Action, Controller:cached_actions_without_layout());
         false -> false
     end.
 

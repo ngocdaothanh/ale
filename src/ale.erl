@@ -77,17 +77,8 @@ gravatar(Email, Size) ->
 
 %-------------------------------------------------------------------------------
 
-set_action_cache(Method, Uri, Value) ->
-    Key = atom_to_list(Method) ++ ":" ++ Uri,
-    merle:set(Key, Value).
-
-get_action_cache(Method, Uri) ->
-    Key = atom_to_list(Method) ++ ":" ++ Uri,
-    merle:getkey(Key).
-
-delete_action_cache(Method, Uri) ->
-    Key = atom_to_list(Method) ++ ":" ++ Uri,
-    merle:getkey(Key).
+cache(Key, Fun) -> ale_cache:cache(Key, Fun).
+cache(Key, Fun, Options) -> ale_cache:cache(Key, Fun, Options).
 
 %-------------------------------------------------------------------------------
 % Private functions

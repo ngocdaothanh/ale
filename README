@@ -85,7 +85,9 @@ For simplicity, only in-coookie session is supported.
 
 Page, action, and fragment are all cached in memcached. The advantage of caching
 pages in memcached instead of on disk is that expiration time can be specified
-for pages.
+for pages. For a certain action, types of caching should be mutual exclusive,
+e.g. if the action is already set to be page cached then it should not also set
+as action cached.
 
 == Tips
 
