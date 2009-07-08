@@ -43,7 +43,8 @@ return_cache_item(CacheItem) ->
     Options = CacheItem#cacheitem.options,
     case proplists:get_value(slide, Options) of
         false -> ignore;
-        _ -> 
+
+        _ ->
             Pid = CacheItem#cacheitem.pid,
             Pid ! cache_hit
     end,
@@ -86,7 +87,7 @@ cache_loop(Key, TTL) ->
 start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_Args) ->
-    Table = ets:new(cache_server, [public, set, {keypos,2}]),
+    Table = ets:new(cache_server, [public, set, {keypos, 2}]),
     {ok, Table}.
 
 handle_call({read, Key}, _From, Table) -> 

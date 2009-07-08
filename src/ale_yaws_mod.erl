@@ -22,13 +22,20 @@ out(Arg) ->
         % Give Yaws a chance to server static file from "/static"
         % See http://groups.google.com/group/nitrogenweb/browse_thread/thread/c2ce70f696b77c9e
         % If Yaws cannot find a file at the Uri, out404 below will be called
-        "/static" ++ _ -> ale:yaws(page, Arg#arg.server_path);
+        %
+        % Note: ale:yaws(page, Arg#arg.server_path) then ale:yaws() causes memory error
+        "/static" ++ _ -> {page, Arg#arg.server_path};
 
         _ ->
             % Errors are not cached
             Method = rest_method(Arg),
             case ale_routes:route_uri(Method, Uri) of
-                no_route -> c_application:error_404(Uri);
+                no_route ->
+                    c_application:error_404(Uri),
+                    case ale:view() of
+                        undefined -> ignore;
+                        View      -> ale:yaws(ehtml, View:render())
+                    end;
 
                 {Controller, Action, Args} ->
                     try
@@ -44,19 +51,19 @@ out(Arg) ->
                             % arguments of Yaws' errormod_crash
                             c_application:error_500(Type, Reason),
                             case ale:view() of
-                                undefined -> ok;
+                                undefined -> ignore;
                                 View      -> ale:yaws(ehtml, View:render())
                             end
                     end
-            end
-    end,
-    ale:yaws().
+            end,
+            ale:yaws()
+    end.
 
 out404(Arg, _GC, _SC) ->
-    Uri = Arg#arg.appmoddata,
+    Uri = Arg#arg.server_path,
     c_application:error_404(Uri),
     case ale:view() of
-        undefined -> ok;
+        undefined -> ignore;
         View      -> ale:yaws(ehtml, View:render())
     end,
     ale:yaws().
@@ -163,7 +170,7 @@ handle_request1(Method, Uri, Controller, Action, Arg, Args) ->
 %% Returns HTML if the request is not halted by a before filter or action cached.
 handle_request2(Method, Uri, Controller, Action, Arg, Args) ->
     case run_before_filters(Controller, Action, Arg, Args) of
-        true -> ok;    % Can't be page cached because halted by a before filter
+        true -> ignore;    % Can't be page cached because halted by a before filter
 
         false ->
             case action_cached_with_layout(Controller, Action) of
@@ -209,7 +216,7 @@ handle_request4(Method, Uri, Controller, Action, Arg, Args) ->
     apply(Controller, Action, [Arg | Args]),
 
     case ale:view() of
-        undefined -> ok;    % Layout is not called if there is no view
+        undefined -> ignore;    % Layout is not called if there is no view
 
         View2 ->
             Ehtml = View2:render(),
