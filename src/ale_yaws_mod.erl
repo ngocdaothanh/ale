@@ -26,7 +26,8 @@ start(SC) ->
 % FIXME: currently cache only works if there is a view to render
 
 out(Arg) ->
-    Uri = Arg#arg.server_path,
+    Uri = Arg#arg.server_path,  % Ale only supports mounting to /
+
     case Uri of
         % Give Yaws a chance to server static file from "/static"
         % See http://groups.google.com/group/nitrogenweb/browse_thread/thread/c2ce70f696b77c9e
@@ -34,7 +35,7 @@ out(Arg) ->
         %
         % NOTE: Yaws 1.84 crashes if we put({yaws, page}, Arg#arg.server_path)
         % and return page
-        "/static" ++ _ -> {page, Arg#arg.server_path};
+        "/static" ++ _ -> {page, Uri};
 
         _ ->
             Method = rest_method(Arg),
