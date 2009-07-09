@@ -75,8 +75,8 @@ gen_routes(Forms) ->
                 "% ", atom_to_list(Controller), "\n",
                 lists:foldl(
                     fun({Method, TypedTokens, Action}, Acc2) ->
-                        UriPattern = uri_pattern(TypedTokens, undefined),
-                        Vars = vars(TypedTokens),
+                        UriPattern = in_uri_pattern(TypedTokens, undefined),
+                        Vars = in_vars(TypedTokens),
                         [
                             Acc2,
                             io_lib:format(
@@ -94,6 +94,38 @@ gen_routes(Forms) ->
         Forms
     ).
 
+%% Returns a flat string like ["hello", Name] to be used as the URI pattern to be matched.
+in_uri_pattern(TypedTokens, Prefix) ->
+    Elems = lists:map(
+        fun(TypedToken) ->
+            case TypedToken of
+                {fixed, Fixed} -> [$"] ++ Fixed ++ [$"];
+                {var,   Var}   -> Var
+            end
+        end,
+        TypedTokens
+    ),
+    case Prefix of
+        undefined -> [$[] ++ string:join(Elems, ", ") ++ [$]];
+        _         -> [$[] ++ string:join([Prefix | Elems], ", ") ++ [$]]
+    end.
+
+%% Returns a flat string like [Name] to be used as the extracted variable parts.
+in_vars(TypedTokens) ->
+    Vars = lists:foldr(
+        fun(TypedToken, Acc) ->
+            case TypedToken of
+                {fixed, _} -> Acc;
+                {var, Var} -> [["yaws_api:url_decode(", Var, ")"] | Acc]
+            end
+        end,
+        [],
+        TypedTokens
+    ),
+    [$[] ++ string:join(Vars, ", ") ++ [$]].
+
+%-------------------------------------------------------------------------------
+
 gen_url_fors(Forms) ->
     lists:foldl(
         fun({Controller, Routes}, Acc) ->
@@ -102,8 +134,8 @@ gen_url_fors(Forms) ->
                 "% ", atom_to_list(Controller), "\n",
                 lists:foldl(
                     fun({_Method, TypedTokens, Action}, Acc2) ->
-                        UriPattern = uri_pattern(TypedTokens, "\"/\""),
-                        Vars = vars(TypedTokens),
+                        UriPattern = out_uri_pattern(TypedTokens, "\"/\""),
+                        Vars = out_vars(TypedTokens),
                         [$c, $_ | ShortControllerS] = atom_to_list(Controller),
                         ShortController = list_to_atom(ShortControllerS),
                         [
@@ -123,15 +155,13 @@ gen_url_fors(Forms) ->
         Forms
     ).
 
-%-------------------------------------------------------------------------------
-
 %% Returns a flat string like ["hello", Name] to be used as the URI pattern to be matched.
-uri_pattern(TypedTokens, Prefix) ->
+out_uri_pattern(TypedTokens, Prefix) ->
     Elems = lists:map(
         fun(TypedToken) ->
             case TypedToken of
                 {fixed, Fixed} -> [$"] ++ Fixed ++ [$"];
-                {var,   Var}   -> Var
+                {var,   Var}   -> ["yaws_api:url_encode(", Var, ")"]
             end
         end,
         TypedTokens
@@ -142,12 +172,12 @@ uri_pattern(TypedTokens, Prefix) ->
     end.
 
 %% Returns a flat string like [Name] to be used as the extracted variable parts.
-vars(TypedTokens) ->
+out_vars(TypedTokens) ->
     Vars = lists:foldr(
         fun(TypedToken, Acc) ->
             case TypedToken of
-                {fixed, _}   -> Acc;
-                {var,   Var} -> [Var | Acc]
+                {fixed, _} -> Acc;
+                {var, Var} -> [Var | Acc]
             end
         end,
         [],

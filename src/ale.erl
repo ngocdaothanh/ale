@@ -22,6 +22,7 @@ app(Key)        -> ale_pd:app(Key).
 %-------------------------------------------------------------------------------
 
 arg()        -> ale_pd:arg().
+method()     -> ale_pd:method().
 controller() -> ale_pd:controller().
 action()     -> ale_pd:action().
 

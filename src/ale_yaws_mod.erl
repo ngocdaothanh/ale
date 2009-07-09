@@ -16,6 +16,15 @@ start(SC) ->
     SC2 = set_docroot(SC),
     start_children(SC2).
 
+% NOTE about caching:
+% * 404 and 500 error pages are not cached
+% * Pages are not cached to files on disk (then let Yaws handle the files). They
+%   are cached in memory the same way as actions, fragments, and objects for 2
+%   reasons: (1) memory caching as Yaws file caching are the same speed
+%   (normally ~3000req/s), (2) functionalities like auto expiration 
+
+% FIXME: currently cache only works if there is a view to render
+
 out(Arg) ->
     Uri = Arg#arg.server_path,
     case Uri of
@@ -28,28 +37,18 @@ out(Arg) ->
         "/static" ++ _ -> {page, Arg#arg.server_path};
 
         _ ->
-            ale_pd:arg(Arg),
-            ale_pd:uri(Uri),
-
-            % NOTE: errors are not cached
-
             Method = rest_method(Arg),
             case ale_routes:route_uri(Method, Uri) of
                 no_route ->
-                    c_application:error_404(Uri),
+                    c_application:error_404(),
                     case ale_pd:view() of
                         undefined -> ignore;
                         View      -> ale_pd:yaws(ehtml, View:render())
                     end;
 
                 {LongController, Action, Args} ->
-                    [$c, $_ | ControllerS] = atom_to_list(LongController),
-                    Controller = list_to_atom(ControllerS),
-                    ale_pd:controller(Controller),
-                    ale_pd:action(Action),
-
                     try
-                        handle_request1(Method, Uri, LongController, Action, Args)
+                        handle_request1(Arg, Method, Uri, LongController, Action, Args)
                     catch
                         Type : Reason ->
                             error_logger:error_report([
@@ -69,9 +68,8 @@ out(Arg) ->
             ale_pd:yaws()
     end.
 
-out404(Arg, _GC, _SC) ->
-    Uri = Arg#arg.server_path,
-    c_application:error_404(Uri),
+out404(_Arg, _GC, _SC) ->
+    c_application:error_404(),
     case ale_pd:view() of
         undefined -> ignore;
         View      -> ale_pd:yaws(ehtml, View:render())
@@ -163,22 +161,29 @@ rest_method(Arg) ->
             end
     end.
 
-% FIXME:
-% currently cache only works if there is a view to render.
-
-handle_request1(Method, Uri, LongController, Action, Args) ->
+handle_request1(Arg, Method, Uri, LongController, Action, Args) ->
     case page_cached(LongController, Action) of
         true ->
             Html = ale_cache:cache(Uri, fun() ->
-                handle_request2(Method, Uri, LongController, Action, Args)
+                handle_request2(Arg, Method, Uri, LongController, Action, Args)
             end),
             ale_pd:yaws(html, Html);
 
-        false -> handle_request2(Method, Uri, LongController, Action, Args)
+        false -> handle_request2(Arg, Method, Uri, LongController, Action, Args)
     end.
 
 %% Returns HTML if the request is not halted by a before filter or action cached.
-handle_request2(Method, Uri, LongController, Action, Args) ->
+handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
+    % Set environment variables to the process dictionary here, not in
+    % handle_request1 because they are not used there
+    ale_pd:arg(Arg),
+    ale_pd:method(Method),
+    ale_pd:uri(Uri),
+    [$c, $_ | ControllerS] = atom_to_list(LongController),
+    Controller = list_to_atom(ControllerS),
+    ale_pd:controller(Controller),
+    ale_pd:action(Action),
+
     case run_before_filters(LongController, Action, Args) of
         true -> ignore;    % Can't be page cached because halted by a before filter
 
@@ -186,24 +191,24 @@ handle_request2(Method, Uri, LongController, Action, Args) ->
             case action_cached_with_layout(LongController, Action) of
                 true ->
                     Html = ale_cache:cache(Uri, fun() ->
-                        handle_request3(Method, Uri, LongController, Action, Args)
+                        handle_request3(Uri, LongController, Action, Args)
                     end),
                     ale_pd:yaws(html, Html);    % Can't be page cached because action cached
 
-                false -> handle_request3(Method, Uri, LongController, Action, Args)
+                false -> handle_request3(Uri, LongController, Action, Args)
             end
     end.
 
 %% Returns HTML if there is a view to render.
-handle_request3(Method, Uri, LongController, Action, Args) ->
+handle_request3(Uri, LongController, Action, Args) ->
     Html = case action_cached_without_layout(LongController, Action) of
         true ->
             ale_cache:cache(Uri, fun() ->
-                handle_request4(Method, Uri, LongController, Action, Args)
+                handle_request4(LongController, Action, Args)
             end);
 
         false ->
-            handle_request4(Method, Uri, LongController, Action, Args)
+            handle_request4(LongController, Action, Args)
     end,
 
     Html2 = case ale_pd:layout() of
@@ -212,14 +217,17 @@ handle_request3(Method, Uri, LongController, Action, Args) ->
         Layout ->
             ale_pd:content_for_layout(Html),
             Ehtml = Layout:render(),
-            yaws_api:ehtml_expand(Ehtml)
+            % Because the result may be cached, we convert to HTML then to
+            % binary for efficiency
+            Html3 = yaws_api:ehtml_expand(Ehtml),
+            list_to_binary(Html3)
     end,
 
     ale_pd:yaws(html, Html2),
     Html2.
 
 %% Returns HTML if there is a view to render.
-handle_request4(Method, Uri, LongController, Action, Args) ->
+handle_request4(LongController, Action, Args) ->
     View = controller_to_view(LongController, Action),
     ale_pd:view(View),
 
@@ -230,8 +238,10 @@ handle_request4(Method, Uri, LongController, Action, Args) ->
 
         View2 ->
             Ehtml = View2:render(),
+            % Because the result may be cached, we convert to HTML then to
+            % binary for efficiency
             Html = yaws_api:ehtml_expand(Ehtml),
-            list_to_binary(Html)   % Convert to binary for caching efficiency
+            list_to_binary(Html)
     end.
 
 page_cached(LongController, Action) ->

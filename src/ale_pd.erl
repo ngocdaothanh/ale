@@ -1,4 +1,4 @@
-%% This module deals with process dictionary.
+%% This module deals with setting and getting values from process dictionary.
 
 -module(ale_pd).
 
@@ -6,10 +6,10 @@
 
 -define(KEY(Namespace, Key), {Namespace, Key}).
 
-yaws(Key, Value) -> erlang:put(?KEY(yaws, Key), Value).
-yaws(Key, Value1, Value2) -> erlang:put(?KEY(yaws, Key), {Value1, Value2}).
+yaws(Key, Value)                  -> erlang:put(?KEY(yaws, Key), Value).
+yaws(Key, Value1, Value2)         -> erlang:put(?KEY(yaws, Key), {Value1, Value2}).
 yaws(Key, Value1, Value2, Value3) -> erlang:put(?KEY(yaws, Key), {Value1, Value2, Value3}).
-yaws(Key) -> erlang:get(?KEY(yaws, Key)).
+yaws(Key)                         -> erlang:get(?KEY(yaws, Key)).
 
 %% Returns the list to be sent to Yaws as the result of Yaws' out/1.
 yaws() ->
@@ -27,13 +27,15 @@ yaws() ->
 %% Each request has its own processing process. If you want to share variables
 %% across functions, use app/2 and app/1.
 app(Key, Value) -> erlang:put(?KEY(app, Key), Value).
-app(Key) -> erlang:get(?KEY(app, Key)).
+app(Key)        -> erlang:get(?KEY(app, Key)).
 
 %-------------------------------------------------------------------------------
 
-arg() -> ale(arg).
+arg()        -> ale(arg).
+method()     -> ale(method).
+uri()        -> ale(uri).
 controller() -> ale(controller).
-action() -> ale(action).
+action()     -> ale(action).
 
 layout(Value) -> ale(layout, Value).
 layout()      -> ale(layout).
@@ -61,10 +63,6 @@ script() ->
 
 %-------------------------------------------------------------------------------
 
-%% If the application is mounted at /prefix and the request path is /prefix/a/b
-%% then this function will return /a/b.
-uri() -> ale(uri).
-
 url_for(Controller, Action)       -> ale_routes:url_for(Controller, Action, []).
 url_for(Controller, Action, Args) -> ale_routes:url_for(Controller, Action, Args).
 
@@ -72,11 +70,12 @@ url_for(Controller, Action, Args) -> ale_routes:url_for(Controller, Action, Args
 % These functions are used internally by Ale.
 
 ale(Key, Value) -> erlang:put(?KEY(ale, Key), Value).
-ale(Key) -> erlang:get(?KEY(ale, Key)).
+ale(Key)        -> erlang:get(?KEY(ale, Key)).
 
-arg(Arg) -> ale(arg, Arg).
-uri(Uri) -> ale(uri, Uri).
+arg(Arg)               -> ale(arg, Arg).
+method(Method)         -> ale(method, Method).
+uri(Uri)               -> ale(uri, Uri).
 controller(Controller) -> ale(controller, Controller).
-action(Action) -> ale(action, Action).
+action(Action)         -> ale(action, Action).
 
 content_for_layout(Value) -> ale(content_for_layout, Value).

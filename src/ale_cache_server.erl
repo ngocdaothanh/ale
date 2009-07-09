@@ -15,17 +15,10 @@
 ]).
 
 -record(cacheitem, {key, value, options, pid}).
--define(DEFAULT_OPTIONS, [
-    {ttl,   infinity},
-    {slide, false}
-]).
 
-cache(Key, Fun) -> cache(Key, Fun, ?DEFAULT_OPTIONS).
+cache(Key, Fun) -> cache(Key, Fun, []).
 
-%% Cache Options:
-%%   {ttl, Seconds}   : time to live until cache is expired
-%%   {slide, Boolean} : slide expiration if the cached object is read
-cache(Key, Fun, Options) -> 
+cache(Key, Fun, Options) ->
     case gen_server:call(?MODULE, {read, Key}, infinity) of
         [CacheItem] ->
             error_logger:info_msg("Cache Hit: ~p", [Key]),
@@ -52,22 +45,21 @@ return_cache_item(CacheItem) ->
     % Return the item.
     CacheItem#cacheitem.value.  
 
-%% Write to the cache table
+%% Write to the cache table.
 recache(Key, Fun, Options) ->
-    % Read the value. 
-    Value = Fun(),
-        
-    % Get the time to live in milliseconds...
+    Value = ale_cache:value(Fun, Options),
+
+    % Get the time to live in milliseconds
     TTL = case proplists:get_value(ttl, Options) of
         infinity  -> infinity;
         undefined -> infinity;
         Seconds   -> Seconds*1000
     end,
 
-    % Start the cache monitor function...
+    % Spawn the cache monitor function
     Pid = erlang:spawn(fun() -> cache_loop(Key, TTL) end),
 
-    % Write to the cache table...
+    % Write to the cache table
     CacheItem = #cacheitem{key = Key, value = Value, options = Options, pid = Pid},
     gen_server:cast(?MODULE, {write, CacheItem}),
 
