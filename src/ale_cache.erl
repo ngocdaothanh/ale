@@ -4,17 +4,22 @@
 
 -include("ale.hrl").
 
-start_link(SC) ->
-    case proplists:get_value("cache_server", SC#sconf.opaque) of
+ram_tables() -> [ale_cache_mnesia:table()].
+
+start_link(SC, Nodes) ->
+    case proplists:get_value("cache", SC#sconf.opaque) of
         undefined -> ignore;
 
-        Config ->
-            case string:tokens(Config, ":") of
+        Server ->
+            case string:tokens(Server, ":") of
                 ["memcached", Host, Port] ->
                     Port2 = list_to_integer(Port),
                     ale_cache_memcached:start_link(Host, Port2);
 
-                ["ets"] -> ale_cache_server:start_link();
+                ["ets"] -> ale_cache_ets:start_link();
+
+                ["mnesia"] ->
+                    ale_cache_mnesia:start_link(Nodes);
 
                 _ -> ingore
             end
@@ -32,18 +37,19 @@ cache(Key, Fun) -> cache(Key, Fun, []).
 %%   {ttl, Seconds}   : time to live until cache is expired
 %%   {slide, Boolean} : slide expiration if the cached object is read
 cache(Key, Fun, Options) ->
-    case whereis(ale_cache_server) of
-        undefined ->
-            case whereis(merle) of
-                undefined ->
-                    error_logger:error_msg("Cache server not running"),
-                    Fun();
-
-                _ -> ale_cache_memcached:cache(Key, Fun, Options)
-            end;
-
-        _ -> ale_cache_server:cache(Key, Fun, Options)
-    end.
+    % case whereis(ale_cache_server) of
+    %     undefined ->
+    %         case whereis(merle) of
+    %             undefined ->
+    %                 error_logger:error_msg("Cache server not running"),
+    %                 Fun();
+    % 
+    %             _ -> ale_cache_memcached:cache(Key, Fun, Options)
+    %         end;
+    % 
+    %     _ -> ale_cache_server:cache(Key, Fun, Options)
+    % end.
+    ale_cache_mnesia:cache(Key, Fun, Options).
 
 value(Fun, Options) ->
     case proplists:get_value(ehtml, Options) of

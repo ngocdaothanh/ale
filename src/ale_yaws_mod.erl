@@ -13,7 +13,7 @@
 
 %% Called after Yaws has loaded.
 start(SC) ->
-    SC2 = set_docroot(SC),
+    SC2 = ale_sc:set_docroot(SC),
     start_children(SC2).
 
 % NOTE about caching:
@@ -79,45 +79,6 @@ out404(_Arg, _GC, _SC) ->
 
 %-------------------------------------------------------------------------------
 
-%% Modifies the current SC to set docroot and xtra_docroots to the list of all
-%% public directories in the application.
-set_docroot(SC) ->
-    {ok, GC, [SCs]} = yaws_api:getconf(),  % The 3rd element is array of array
-
-    % docroot is undefined at this moment (see yaws.conf)
-    % SC2 = SC#sconf{xtra_docroots = public_dirs()} does not work because Yaws
-    % does not check public_dirs if it sees that docroot is undefined
-    SC2 = SC#sconf{docroot = "docroot", xtra_docroots = xtra_docroots()},
-
-    % 10: position of servername in the sconf record, see yaws.hrl
-    SCs2 = lists:keyreplace(SC#sconf.servername, 10, SCs, SC2),
-
-    yaws_api:setconf(GC, [SCs2]),
-    SC2.
-
-xtra_docroots() ->
-    xtra_docroots(filelib:wildcard("./*"), []).
-
-xtra_docroots(Dirs, Acc) ->
-    lists:foldl(
-        fun(Dir, Acc2) ->
-            case filelib:is_dir(Dir) of
-                false -> Acc2;
-
-                true ->
-                    Basename = filename:basename(Dir),
-                    case Basename of
-                        "docroot" -> [Dir | Acc];
-                        _ -> xtra_docroots(filelib:wildcard(Dir ++ "/*"), Acc2)
-                    end
-            end
-        end,
-        Acc,
-        Dirs
-    ).
-
-%-------------------------------------------------------------------------------
-
 %% Starts the application supervisor and Merle. They are supervised by Ale, which
 %% is in turn supervised by yaws_sup. We cannot let the 2 children supervised
 %% directly by yaws_sup because yaws_sup is configured as "one_for_all", thus
@@ -131,16 +92,15 @@ start_children(SC) ->
 
 %% Called by start_children above.
 init(SC) ->
+    Nodes = ale_sc:nodes(SC),
     AppSpec = {
-        ale_application, {c_application, start, [SC]},
+        c_application, {c_application, start, [SC, Nodes]},
         permanent, brutal_kill, worker, [c_application]
     },
-
     CacheSpec = {
-        ale_cache, {ale_cache, start_link, [SC]},
+        ale_cache, {ale_cache, start_link, [SC, Nodes]},
         permanent, brutal_kill, worker, [ale_cache]
     },
-
     {ok, {{one_for_one, ?MAX_R, ?MAX_T}, [AppSpec, CacheSpec]}}.
 
 %-------------------------------------------------------------------------------

@@ -2,12 +2,12 @@
 %
 % Copyright Rusty Klophaus under MIT license
 
--module(ale_cache_server).
+-module(ale_cache_ets).
 
 -behaviour(gen_server).
 
 -export ([
-    cache/2, cache/3,
+    cache/3,
 
     start_link/0,
     init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -15,8 +15,6 @@
 ]).
 
 -record(cacheitem, {key, value, options, pid}).
-
-cache(Key, Fun) -> cache(Key, Fun, []).
 
 cache(Key, Fun, Options) ->
     case gen_server:call(?MODULE, {read, Key}, infinity) of
