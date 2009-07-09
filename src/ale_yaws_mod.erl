@@ -23,23 +23,33 @@ out(Arg) ->
         % See http://groups.google.com/group/nitrogenweb/browse_thread/thread/c2ce70f696b77c9e
         % If Yaws cannot find a file at the Uri, out404 below will be called
         %
-        % Note: ale:yaws(page, Arg#arg.server_path) then ale:yaws() causes memory error
+        % NOTE: Yaws 1.84 crashes if we put({yaws, page}, Arg#arg.server_path)
+        % and return page
         "/static" ++ _ -> {page, Arg#arg.server_path};
 
         _ ->
-            % Errors are not cached
+            ale_pd:arg(Arg),
+            ale_pd:uri(Uri),
+
+            % NOTE: errors are not cached
+
             Method = rest_method(Arg),
             case ale_routes:route_uri(Method, Uri) of
                 no_route ->
                     c_application:error_404(Uri),
-                    case ale:view() of
+                    case ale_pd:view() of
                         undefined -> ignore;
-                        View      -> ale:yaws(ehtml, View:render())
+                        View      -> ale_pd:yaws(ehtml, View:render())
                     end;
 
-                {Controller, Action, Args} ->
+                {LongController, Action, Args} ->
+                    [$c, $_ | ControllerS] = atom_to_list(LongController),
+                    Controller = list_to_atom(ControllerS),
+                    ale_pd:controller(Controller),
+                    ale_pd:action(Action),
+
                     try
-                        handle_request1(Method, Uri, Controller, Action, Arg, Args)
+                        handle_request1(Method, Uri, LongController, Action, Args)
                     catch
                         Type : Reason ->
                             error_logger:error_report([
@@ -50,23 +60,23 @@ out(Arg) ->
                             % Type and Reason are more convenient than those
                             % arguments of Yaws' errormod_crash
                             c_application:error_500(Type, Reason),
-                            case ale:view() of
+                            case ale_pd:view() of
                                 undefined -> ignore;
-                                View      -> ale:yaws(ehtml, View:render())
+                                View      -> ale_pd:yaws(ehtml, View:render())
                             end
                     end
             end,
-            ale:yaws()
+            ale_pd:yaws()
     end.
 
 out404(Arg, _GC, _SC) ->
     Uri = Arg#arg.server_path,
     c_application:error_404(Uri),
-    case ale:view() of
+    case ale_pd:view() of
         undefined -> ignore;
-        View      -> ale:yaws(ehtml, View:render())
+        View      -> ale_pd:yaws(ehtml, View:render())
     end,
-    ale:yaws().
+    ale_pd:yaws().
 
 %-------------------------------------------------------------------------------
 
@@ -156,66 +166,66 @@ rest_method(Arg) ->
 % FIXME:
 % currently cache only works if there is a view to render.
 
-handle_request1(Method, Uri, Controller, Action, Arg, Args) ->
-    case page_cached(Controller, Action) of
+handle_request1(Method, Uri, LongController, Action, Args) ->
+    case page_cached(LongController, Action) of
         true ->
-            Html = ale:cache(Uri, fun() ->
-                handle_request2(Method, Uri, Controller, Action, Arg, Args)
+            Html = ale_cache:cache(Uri, fun() ->
+                handle_request2(Method, Uri, LongController, Action, Args)
             end),
-            ale:yaws(html, Html);
+            ale_pd:yaws(html, Html);
 
-        false -> handle_request2(Method, Uri, Controller, Action, Arg, Args)
+        false -> handle_request2(Method, Uri, LongController, Action, Args)
     end.
 
 %% Returns HTML if the request is not halted by a before filter or action cached.
-handle_request2(Method, Uri, Controller, Action, Arg, Args) ->
-    case run_before_filters(Controller, Action, Arg, Args) of
+handle_request2(Method, Uri, LongController, Action, Args) ->
+    case run_before_filters(LongController, Action, Args) of
         true -> ignore;    % Can't be page cached because halted by a before filter
 
         false ->
-            case action_cached_with_layout(Controller, Action) of
+            case action_cached_with_layout(LongController, Action) of
                 true ->
-                    Html = ale:cache(Uri, fun() ->
-                        handle_request3(Method, Uri, Controller, Action, Arg, Args)
+                    Html = ale_cache:cache(Uri, fun() ->
+                        handle_request3(Method, Uri, LongController, Action, Args)
                     end),
-                    ale:yaws(html, Html);    % Can't be page cached because action cached
+                    ale_pd:yaws(html, Html);    % Can't be page cached because action cached
 
-                false -> handle_request3(Method, Uri, Controller, Action, Arg, Args)
+                false -> handle_request3(Method, Uri, LongController, Action, Args)
             end
     end.
 
 %% Returns HTML if there is a view to render.
-handle_request3(Method, Uri, Controller, Action, Arg, Args) ->
-    Html = case action_cached_without_layout(Controller, Action) of
+handle_request3(Method, Uri, LongController, Action, Args) ->
+    Html = case action_cached_without_layout(LongController, Action) of
         true ->
-            ale:cache(Uri, fun() ->
-                handle_request4(Method, Uri, Controller, Action, Arg, Args)
+            ale_cache:cache(Uri, fun() ->
+                handle_request4(Method, Uri, LongController, Action, Args)
             end);
 
         false ->
-            handle_request4(Method, Uri, Controller, Action, Arg, Args)
+            handle_request4(Method, Uri, LongController, Action, Args)
     end,
 
-    Html2 = case ale:layout() of
+    Html2 = case ale_pd:layout() of
         undefined -> Html;
 
         Layout ->
-            ale:content_for_layout(Html),
+            ale_pd:content_for_layout(Html),
             Ehtml = Layout:render(),
             yaws_api:ehtml_expand(Ehtml)
     end,
 
-    ale:yaws(html, Html2),
+    ale_pd:yaws(html, Html2),
     Html2.
 
 %% Returns HTML if there is a view to render.
-handle_request4(Method, Uri, Controller, Action, Arg, Args) ->
-    View = controller_to_view(Controller, Action),
-    ale:view(View),
+handle_request4(Method, Uri, LongController, Action, Args) ->
+    View = controller_to_view(LongController, Action),
+    ale_pd:view(View),
 
-    apply(Controller, Action, [Arg | Args]),
+    apply(LongController, Action, Args),
 
-    case ale:view() of
+    case ale_pd:view() of
         undefined -> ignore;    % Layout is not called if there is no view
 
         View2 ->
@@ -223,40 +233,39 @@ handle_request4(Method, Uri, Controller, Action, Arg, Args) ->
             yaws_api:ehtml_expand(Ehtml)
     end.
 
-page_cached(Controller, Action) ->
-    code:ensure_loaded(Controller),
-    case erlang:function_exported(Controller, cached_pages, 0) of
-        true  -> lists:member(Action, Controller:cached_pages());
+page_cached(LongController, Action) ->
+    code:ensure_loaded(LongController),
+    case erlang:function_exported(LongController, cached_pages, 0) of
+        true  -> lists:member(Action, LongController:cached_pages());
         false -> false
     end.
 
-action_cached_with_layout(Controller, Action) ->
-    code:ensure_loaded(Controller),
-    case erlang:function_exported(Controller, cached_actions_with_layout, 0) of
-        true  -> lists:member(Action, Controller:cached_actions_with_layout());
+action_cached_with_layout(LongController, Action) ->
+    code:ensure_loaded(LongController),
+    case erlang:function_exported(LongController, cached_actions_with_layout, 0) of
+        true  -> lists:member(Action, LongController:cached_actions_with_layout());
         false -> false
     end.
 
-action_cached_without_layout(Controller, Action) ->
-    code:ensure_loaded(Controller),
-    case erlang:function_exported(Controller, cached_actions_without_layout, 0) of
-        true  -> lists:member(Action, Controller:cached_actions_without_layout());
+action_cached_without_layout(LongController, Action) ->
+    code:ensure_loaded(LongController),
+    case erlang:function_exported(LongController, cached_actions_without_layout, 0) of
+        true  -> lists:member(Action, LongController:cached_actions_without_layout());
         false -> false
     end.
 
 %% Returns true if the action should be halted.
-run_before_filters(Controller, Action, Arg, Args) ->
-    lists:any(
-        fun(Module) ->
-            case erlang:function_exported(Module, before_filter, 4) of
-                true  -> Module:before_filter(Controller, Action, Arg, Args);
-                false -> false
-            end
-        end,
-        [c_application, Controller]
-    ).
+run_before_filters(LongController, Action, Args) ->
+    case erlang:function_exported(c_application, before_filter, 3) andalso
+        c_application:before_filter(ale_pd:controller(), Action, Args) of
+        true -> true;
+
+        false ->
+            erlang:function_exported(LongController, before_filter, 2) andalso
+                LongController:before_filter(Action, Args)
+    end.
 
 %% Converts c_hello and show to v_hello_show
-controller_to_view(Controller, Action) ->
-    [$c, $_ | Base] = atom_to_list(Controller),
+controller_to_view(LongController, Action) ->
+    [$c, $_ | Base] = atom_to_list(LongController),
     list_to_atom("v_" ++ Base ++ "_" ++ atom_to_list(Action)).

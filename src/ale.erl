@@ -1,87 +1,58 @@
+%% Functions in this module are the APIs of the Ale framework. Applications
+%% would need to use these functions.
+
 -module(ale).
 
 -compile(export_all).
 
--define(KEY(Namespace, Key), {Namespace, Key}).
+%-------------------------------------------------------------------------------
 
 sync() -> make:all([load]).
 
 %-------------------------------------------------------------------------------
 
-yaws(Key, Value) -> erlang:put(?KEY(yaws, Key), Value).
-yaws(Key, Value1, Value2) -> erlang:put(?KEY(yaws, Key), {Value1, Value2}).
-yaws(Key, Value1, Value2, Value3) -> erlang:put(?KEY(yaws, Key), {Value1, Value2, Value3}).
-yaws(Key) -> erlang:get(?KEY(yaws, Key)).
+yaws(Key, Value)                  -> ale_pd:yaws(Key, Value).
+yaws(Key, Value1, Value2)         -> ale_pd:yaws(Key, Value1, Value2).
+yaws(Key, Value1, Value2, Value3) -> ale_pd:yaws(Key, Value1, Value2, Value3).
+yaws(Key)                         -> ale_pd:yaws(Key).
 
-%% Returns the list to be sent to Yaws as the result of Yaws' out/1.
-yaws() ->
-    lists:foldr(
-        fun
-            ({{yaws, Key}, {Value1, Value2, Value3}}, Acc) -> [{Key, Value1, Value2, Value3} | Acc];
-            ({{yaws, Key}, {Value1, Value2        }}, Acc) -> [{Key, Value1, Value2        } | Acc];
-            ({{yaws, Key},  Value                  }, Acc) -> [{Key, Value}                  | Acc];
-            (_                                      , Acc) ->                                  Acc
-        end,
-        [],
-        erlang:get()
-    ).
-
-%% Each request has its own processing process. If you want to share variables
-%% across functions, use app/2 and app/1.
-app(Key, Value) -> erlang:put(?KEY(app, Key), Value).
-app(Key) -> erlang:get(?KEY(app, Key)).
+app(Key, Value) -> ale_pd:app(Key, Value).
+app(Key)        -> ale_pd:app(Key).
 
 %-------------------------------------------------------------------------------
 
-layout(Value) -> ale(layout, Value).
-layout()      -> ale(layout).
+arg()        -> ale_pd:arg().
+controller() -> ale_pd:controller().
+action()     -> ale_pd:action().
 
-view(Value) -> ale(view, Value).
-view()      -> ale(view).
+layout(Value) -> ale_pd:layout(Value).
+layout()      -> ale_pd:layout().
 
-content_for_layout(Value) -> ale(content_for_layout, Value).
-content_for_layout()      -> ale:ale(content_for_layout).
+view(Value) -> ale_pd:view(Value).
+view()      -> ale_pd:view().
 
-%% Accumulates Script.
-script(Script) ->
-    case ale(script) of
-        undefined -> ale(script, Script);
-        IoList    -> ale(script, [IoList, Script])
-    end.
+content_for_layout() -> ale_pd:content_for_layout().
 
-%% Returns {script, [{type, "text/javascript"}], accumulated scripts} or "" if there is no script.
-script() ->
-    case ale(script) of
-        undefined -> "";
-        IoList    -> {script, [{type, "text/javascript"}], IoList}
-    end.
+script(Script) -> ale_pd:script(Script).
+script()       -> ale_pd:script().
 
 %-------------------------------------------------------------------------------
 
-user() ->
-    undefined.
+uri() -> ale_pd:uri().
+
+url_for(Controller, Action)       -> ale_routes:url_for(Controller, Action, []).
+url_for(Controller, Action, Args) -> ale_routes:url_for(Controller, Action, Args).
 
 %-------------------------------------------------------------------------------
 
-md5_hex(Data) ->
-    Md5 = erlang:md5(Data),
-    lists:flatten([io_lib:format("~2.16.0b", [N]) || N <- binary_to_list(Md5)]).
-
-gravatar(Email, Size) ->
-    GravatarId = case Email of
-        undefined -> "";
-        _         -> md5_hex(Email)
-    end,
-    Src = io_lib:format("http://www.gravatar.com/avatar.php?size=~p&gravatar_id=~s", [Size, GravatarId]),
-    {img, [{src, Src}]}.
-
-%-------------------------------------------------------------------------------
-
-cache(Key, Fun) -> ale_cache:cache(Key, Fun).
+cache(Key, Fun)          -> ale_cache:cache(Key, Fun).
 cache(Key, Fun, Options) -> ale_cache:cache(Key, Fun, Options).
 
 %-------------------------------------------------------------------------------
-% Private functions
 
-ale(Key, Value) -> erlang:put(?KEY(ale, Key), Value).
-ale(Key) -> erlang:get(?KEY(ale, Key)).
+user() -> ale_session:user().
+
+%-------------------------------------------------------------------------------
+
+md5_hex(Data) -> ale_utils:md5_hex(Data).
+gravatar(Email, Size) -> ale_utils:gravatar(Email, Size).
