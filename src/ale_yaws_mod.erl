@@ -230,7 +230,8 @@ handle_request4(Method, Uri, LongController, Action, Args) ->
 
         View2 ->
             Ehtml = View2:render(),
-            yaws_api:ehtml_expand(Ehtml)
+            Html = yaws_api:ehtml_expand(Ehtml),
+            list_to_binary(Html)   % Convert to binary for caching efficiency
     end.
 
 page_cached(LongController, Action) ->

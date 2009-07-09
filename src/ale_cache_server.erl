@@ -63,10 +63,10 @@ recache(Key, Fun, Options) ->
         undefined -> infinity;
         Seconds   -> Seconds*1000
     end,
-    
+
     % Start the cache monitor function...
     Pid = erlang:spawn(fun() -> cache_loop(Key, TTL) end),
-    
+
     % Write to the cache table...
     CacheItem = #cacheitem{key = Key, value = Value, options = Options, pid = Pid},
     gen_server:cast(?MODULE, {write, CacheItem}),
@@ -93,11 +93,11 @@ init(_Args) ->
 handle_call({read, Key}, _From, Table) -> 
     Result = ets:lookup(Table, Key),
     {reply, Result, Table}.
-    
+
 handle_cast({write, Tuple}, Table) ->
     ets:insert(Table, Tuple),
     {noreply, Table};
-    
+
 handle_cast({delete, Key}, Table) ->
     ets:delete(Table, Key),
     {noreply, Table}.
