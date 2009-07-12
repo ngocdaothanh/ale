@@ -4,11 +4,11 @@
 
 -define(MAGIC, "ale_cache_cherly").
 
-start_link(Nodes, Mem) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, Mem, []).
+start_link(SizeInMB) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, SizeInMB*1024*1024, []).
 
-init(Mem) ->
-    {ok, C} = cherly:start(Mem),
+init(Size) ->
+    {ok, C} = cherly:start(Size),
     {ok, C}.
 
 r(Key, Fun, Options) ->

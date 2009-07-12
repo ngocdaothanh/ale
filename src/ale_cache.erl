@@ -1,9 +1,13 @@
-%%% This module is the interface to various cache impelemtations. Ale and
-%%% applications use this module instead of using impelemtation modules.
+%%% This module is the interface to various cache impelemtations.
 %%%
 %%% error_logger does not support log level, thus "cache hit" message should
 %%% not be logged, e.g. error_logger:info_msg("Cache Hit: ~p", [Key])
 %%% to avoid IO bottle neck.
+%%%
+%%% Assumptions:
+%%% * Memory only, even for page cache
+%%% * At least 100MB should be used
+%%% * LRU is a must, no TTL is needed
 
 -module(ale_cache).
 
@@ -11,25 +15,41 @@
 
 -include("ale.hrl").
 
-%% Cache implementations may use Mnesia. When applications use Mnesia and its
-%% replication feature, they should call this function to know which RAM tables
-%% are used by the cache server and replicate them as ram_copies properly.
-mnesia_ram_tables() -> ale_cache_mnesia:mnesia_ram_tables().
-
 start_link(SC, Nodes) ->
     case proplists:get_value("cache", SC#sconf.opaque) of
         undefined -> ignore;
 
-        Server ->
-            case string:tokens(Server, ":") of
-                ["memcached", ServersFile] -> ale_cache_memcached:start_link(ServersFile);
+        Config ->
+            case string:tokens(Config, ":") of
+                ["etscached", SizeInMB] ->
+                    ale_cache_etscached:start_link(Nodes, list_to_integer(SizeInMB));
 
-                ["etscached", Mem] -> ale_cache_etscached:start_link(Nodes, list_to_integer(Mem));
+                ["cherly", SizeInMB] ->
+                    ale_cache_cherly:start_link(list_to_integer(SizeInMB));
 
-                ["cherly", Mem] -> ale_cache_cherly:start_link(Nodes, list_to_integer(Mem)*1024*1024);
+                ["memcached", Host, Port] ->
+                    ale_cache_memcached:start_link(Host, list_to_integer(Port));
 
-                _ -> ingore
+                ["memcached_with_libketama", ServersFile] ->
+                    ale_cache_memcached_with_libketama:start_link(ServersFile);
+
+                _ ->
+                    ingore
             end
+    end.
+
+%% Cache implementations may use Mnesia. When applications use Mnesia and its
+%% replication feature, they should call this function to know which RAM tables
+%% are used by the cache server and replicate them as ram_copies properly.
+%%
+%% When Mnesia is used, tables should be ram_copies. Cache data is temporary and
+%% it's OK if it is lost! and should be replicated to all nodes. What's the
+%% point of using Mnesia if ram_copies and replication are not used!
+mnesia_ram_tables() ->
+    Module = cache_module(),
+    case erlang:function_exported(Module, mnesia_ram_tables, 0) of
+        true -> Module:mnesia_ram_tables();
+        _    -> []
     end.
 
 %-------------------------------------------------------------------------------

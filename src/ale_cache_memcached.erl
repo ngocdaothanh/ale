@@ -1,14 +1,10 @@
+%%% http://github.com/joewilliams/merle
+
 -module(ale_cache_memcached).
 
 -compile(export_all).
 
-start_link(ServersFile) ->
-    % Use the merle library that has libketama feature
-    % application:load(merle),
-    % application:set_env(merle, file, ServersFile),
-    % application:start(merle),
-    % ignore.
-    merle:connect().
+start_link(Host, Port) -> merle:connect(Host, Port).
 
 r(Key, Fun, Options) ->
     case merle:getkey(Key) of

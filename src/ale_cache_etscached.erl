@@ -2,8 +2,7 @@
 
 -compile(export_all).
 
-start_link(Nodes, Mem) ->
-    etscached:start_link(Nodes, Mem).
+start_link(Nodes, Mem) -> etscached:start_link(Nodes, Mem).
 
 r(Key, Fun, Options) ->
     Fun2 = fun() -> ale_cache:value(Fun, Options) end,
