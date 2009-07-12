@@ -46,8 +46,11 @@ url_for(Controller, Action, Args) -> ale_routes:url_for(Controller, Action, Args
 
 %-------------------------------------------------------------------------------
 
-cache(Key, Fun)          -> ale_cache:cache(Key, Fun).
-cache(Key, Fun, Options) -> ale_cache:cache(Key, Fun, Options).
+r(Key, Fun)          -> ale_cache:r(Key, Fun).
+r(Key, Fun, Options) -> ale_cache:r(Key, Fun, Options).
+
+u(Key, Fun)          -> ale_cache:u(Key, Fun).
+u(Key, Fun, Options) -> ale_cache:u(Key, Fun, Options).
 
 %-------------------------------------------------------------------------------
 

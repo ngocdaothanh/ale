@@ -88,7 +88,13 @@ start_children(SC) ->
         ale, {supervisor, start_link, [?MODULE, SC]},
         permanent, infinity, supervisor, [ale_yaws_mod]
     },
-    supervisor:start_child(yaws_sup, ChildSpec).
+    case supervisor:start_child(yaws_sup, ChildSpec) of
+        {error, Reason} ->
+            error_logger:error_msg("Error starting Ale application:~n~p~n", [Reason]),
+            {error, Reason};
+
+        X -> X
+    end.
 
 %% Called by start_children above.
 init(SC) ->
@@ -125,7 +131,7 @@ rest_method(Arg) ->
 handle_request1(Arg, Method, Uri, LongController, Action, Args) ->
     case page_cached(LongController, Action) of
         true ->
-            Html = ale_cache:cache(Uri, fun() ->
+            Html = ale_cache:r(Uri, fun() ->
                 handle_request2(Arg, Method, Uri, LongController, Action, Args)
             end),
             ale_pd:yaws(html, Html);
@@ -151,7 +157,7 @@ handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
         false ->
             case action_cached_with_layout(LongController, Action) of
                 true ->
-                    Html = ale_cache:cache(Uri, fun() ->
+                    Html = ale_cache:r(Uri, fun() ->
                         handle_request3(Uri, LongController, Action, Args)
                     end),
                     ale_pd:yaws(html, Html);    % Can't be page cached because action cached
@@ -164,7 +170,7 @@ handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
 handle_request3(Uri, LongController, Action, Args) ->
     Html = case action_cached_without_layout(LongController, Action) of
         true ->
-            ale_cache:cache(Uri, fun() ->
+            ale_cache:r(Uri, fun() ->
                 handle_request4(LongController, Action, Args)
             end);
 

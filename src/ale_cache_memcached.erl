@@ -2,19 +2,24 @@
 
 -compile(export_all).
 
-start_link(Host, Port) -> merle:connect(Host, Port).
+start_link(ServersFile) ->
+    % Use the merle library that has libketama feature
+    % application:load(merle),
+    % application:set_env(merle, file, ServersFile),
+    % application:start(merle),
+    % ignore.
+    merle:connect().
 
-%% See ale_cache:cache/3.
-cache(Key, Fun, Options) ->
+r(Key, Fun, Options) ->
     case merle:getkey(Key) of
         undefined ->
             error_logger:info_msg("Cache Miss: ~p", [Key]),
-            Value = ale_cache:value(Fun, Options),
-            merle:set(Key, Value),
-            Value;
+            u(Key, Fun, Options);
 
-        Value ->
-            error_logger:info_msg("Cache Hit: ~p", [Key]),
-            Value
+        Value -> Value
     end.
-    
+
+u(Key, Fun, Options) ->
+    Value = ale_cache:value(Fun, Options),
+    merle:set(Key, Value),
+    Value.
