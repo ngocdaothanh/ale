@@ -39,13 +39,10 @@ gen() ->
 
 %% Returns {Controller, [{Method, [{fixed, Token} | {var, Token}], Action}]}
 parse(Controller) ->
-    code:ensure_loaded(Controller),
-    case erlang:function_exported(Controller, routes, 0) of
-        false -> undefined;
-
-        true ->
-            Routes = Controller:routes(),
-            {Controller, parse(Routes, [])}
+    Attributes = Controller:module_info(attributes),
+    case proplists:get_value(routes, Attributes) of
+        undefined -> undefined;
+        Routes    -> {Controller, parse(Routes, [])}
     end.
 
 parse([], Acc) ->
