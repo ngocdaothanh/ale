@@ -1,12 +1,16 @@
 Ale is a thin layer above Yaws to make web development with Yaws easier. It
 provides:
 * Sinatra-like routes (http://github.com/sinatra/sinatra)
-* Gettext
-* Some other utilities and conventions
+* i18n with Gettext
+* Distributed memory caching for pages, actions, fragments, and objects
+* Some conventions
 
-== Create new project
+== Install and Create New Project
 
-Yaws 1.83
+Dependent libraries:
+* Yaws 1.84
+
+TODO
 
 == Routes
 
@@ -14,20 +18,20 @@ A route maps method and URI to controller and action. Routes are defined in
 controllers.
 
 routes() -> [
-	get,    "articles",         index,
-	get,    "articles/Id",      show,
-	get,    "articles/new",     new,
-	post,   "articles",         create,
-	get,    "articles/Id/edit", edit,
-	put,    "articles/Id",      update,
-	delete, "articles/Id",      delete
+	get,    "/articles",         index,
+	get,    "/articles/Id",      show,
+	get,    "/articles/new",     new,
+	post,   "/articles",         create,
+	get,    "/articles/Id/edit", edit,
+	put,    "/articles/Id",      update,
+	delete, "/articles/Id",      delete
 ].
 
 Fixed parts are in lower case, variable parts are captitalized.
 
 Function names are used so that filters can used their names.
 
-== controller_application
+== c_application
 
 This controller defines common functionalities for all other controllers:
 * error_404 and error_500, these functions do not use layout to avoid the case
@@ -46,11 +50,11 @@ is not forced to be the last line of your action. Use ale:put/3-5 to put things
 to namespaces in the process dictionary. Things in the "yaws" namespace will be
 collected into a list and sent to Yaws.
 
-== Views
+== View
 
-If your controller is c_x and action is y, v_x_y:render/0 will be called. Your
-actions should call ale:app(Key, Thing) to put things to the "app"
-namespace, ale:app(Key) in your views to get them.
+If your controller is c_hello and action is world, v_hello_world:render/0 will
+be called. Your action should call ale:app(Key, Thing) to put things to the
+"app" namespace, your view should call ale:app(Key) to get things back.
 
 If you want to use a view other than the default view, in your action call
 ale:view(ViewModule).
@@ -79,12 +83,12 @@ function should return true.
 
 == Session
 
-For simplicity, only in-coookie session is supported.
+TODO
 
 == Cache
 
-Page, action, and fragment are all cached in memcached. The advantage of caching
-pages in memcached instead of on disk is that expiration time can be specified
+Page, action, fragment, and object are all cached in memory. The advantage of
+caching pages in memory instead of on disk is that expiration time can be specified
 for pages. For a certain action, types of caching should be mutual exclusive,
 e.g. if the action is already set to be page cached then it should not also set
 as action cached.

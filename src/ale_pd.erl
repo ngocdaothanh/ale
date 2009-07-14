@@ -24,10 +24,23 @@ yaws() ->
         erlang:get()
     ).
 
-%% Each request has its own processing process. If you want to share variables
-%% across functions, use app/2 and app/1.
 app(Key, Value) -> erlang:put(?KEY(app, Key), Value).
-app(Key)        -> erlang:get(?KEY(app, Key)).
+
+app(Key) ->
+    Value = erlang:get(?KEY(app, Key)),
+
+    % Trick:
+    % If
+    % * the current action is cached without layout
+    % * the layout is being rendered
+    % then this function is being called (directly of indirectly) from the the
+    % layout. In this case, Value should also be cached together with the view of
+    % the action.
+    case ale(variables_for_layout) of
+        undefined -> ok;
+        VFL       -> ale(variables_for_layout, [{Key, Value} | VFL])
+    end,
+    Value.
 
 %-------------------------------------------------------------------------------
 

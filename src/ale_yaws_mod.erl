@@ -47,14 +47,17 @@ out(Arg) ->
                         View      -> ale_pd:yaws(ehtml, View:render())
                     end;
 
+                % Long:  c_hello
+                % Short: hello
                 {LongController, Action, Args} ->
                     try
                         handle_request1(Arg, Method, Uri, LongController, Action, Args)
                     catch
                         Type : Reason ->
                             error_logger:error_report([
-                                {type, Type}, {reason, Reason},
-                                {trace, erlang:get_stacktrace()}
+                                {type,   Type},
+                                {reason, Reason},
+                                {trace,  erlang:get_stacktrace()}
                             ]),
 
                             % Type and Reason are more convenient than those
@@ -131,7 +134,7 @@ rest_method(Arg) ->
 handle_request1(Arg, Method, Uri, LongController, Action, Args) ->
     case page_cached(LongController, Action) of
         true ->
-            Html = ale_cache:r(Uri, fun() ->
+            Html = ale_cache:c(Uri, fun() ->
                 handle_request2(Arg, Method, Uri, LongController, Action, Args)
             end),
             ale_pd:yaws(html, Html);
@@ -141,8 +144,9 @@ handle_request1(Arg, Method, Uri, LongController, Action, Args) ->
 
 %% Returns HTML if the request is not halted by a before filter or action cached.
 handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
-    % Set environment variables to the process dictionary here, not in
-    % handle_request1 because they are not used there
+    % Set environment variables to the process dictionary here (not in
+    % handle_request1 because they are not used there) because the application
+    % may need these variables
     ale_pd:arg(Arg),
     ale_pd:method(Method),
     ale_pd:uri(Uri),
@@ -157,7 +161,7 @@ handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
         false ->
             case action_cached_with_layout(LongController, Action) of
                 true ->
-                    Html = ale_cache:r(Uri, fun() ->
+                    Html = ale_cache:c(Uri, fun() ->
                         handle_request3(Uri, LongController, Action, Args)
                     end),
                     ale_pd:yaws(html, Html);    % Can't be page cached because action cached
@@ -168,30 +172,96 @@ handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
 
 %% Returns HTML if there is a view to render.
 handle_request3(Uri, LongController, Action, Args) ->
-    Html = case action_cached_without_layout(LongController, Action) of
+    ActionCachedWithoutLayout = action_cached_without_layout(LongController, Action),
+    {ContentForLayout, FromCache} = case ActionCachedWithoutLayout of
         true ->
-            ale_cache:r(Uri, fun() ->
-                handle_request4(LongController, Action, Args)
-            end);
+            % If taken from cache then it is binary or list:
+            % * If list, it is:
+            % [{content_for_layout, Binary} | Variables to be put to process dictionary for layout to use]
+            % * If binary, it is content_for_layout
+            case ale_cache:c(Uri) of
+                not_found -> {handle_request4(LongController, Action, Args), false};
+
+                {ok, BinaryOrList} ->
+                    case is_binary(BinaryOrList) of
+                        true -> {BinaryOrList, true};
+
+                        false ->
+                            CFL = proplists:get_value(content_for_layout, BinaryOrList),
+                            lists:foreach(
+                                fun({Key, Value}) ->
+                                    case Key == content_for_layout of
+                                        true  -> ok;
+                                        false -> ale_pd:app(Key, Value)
+                                    end
+                                end,
+                                BinaryOrList
+                            ),
+                            {CFL, true}
+                    end
+            end;
 
         false ->
-            handle_request4(LongController, Action, Args)
+            % Binary
+            {handle_request4(LongController, Action, Args), undefined}
     end,
 
-    Html2 = case ale_pd:layout() of
-        undefined -> Html;
+    Html = case ale_pd:layout() of
+        undefined ->
+            case ActionCachedWithoutLayout of
+                false -> ok;
+
+                % Cache ContentForLayout if is was not from cache
+                true ->
+                    case FromCache of
+                        true  -> ok;
+                        false -> ale_cache:c(Uri, fun() -> ContentForLayout end)
+                    end
+            end,
+            ContentForLayout;
 
         Layout ->
-            ale_pd:content_for_layout(Html),
-            Ehtml = Layout:render(),
+            ale_pd:content_for_layout(ContentForLayout),
+
+            % See above and ale_pd:app/1
+            Ehtml = case ActionCachedWithoutLayout of
+                false -> Layout:render();
+
+                true ->
+                    % Cache ContentForLayout if is was not from cache
+                    case FromCache of
+                        true ->
+                            % Things have been put into the process dictionary above
+                            % we just need to render the layout
+                            Layout:render();
+
+                        false ->
+                            % Variables for layout will be accumulated in ale_pd:app/2
+                            ale_pd:ale(variables_for_layout, []),
+                            Ehtml2 = Layout:render(),
+
+                            % If the layout did not use any variable from the action or
+                            % its view, we only need to cache the content. Otherwise
+                            % we need to cache the content and variables.
+                            VFL = ale_pd:ale(variables_for_layout),
+                            ThingToCache = case length(VFL) of
+                                0 -> ContentForLayout;
+                                _ -> [{content_for_layout, ContentForLayout} | VFL]
+                            end,
+                            ale_cache:c(Uri, fun() -> ThingToCache end),
+
+                            Ehtml2
+                    end
+            end,
+
             % Because the result may be cached, we convert to HTML then to
             % binary for efficiency
-            Html3 = yaws_api:ehtml_expand(Ehtml),
-            list_to_binary(Html3)
+            Html2 = yaws_api:ehtml_expand(Ehtml),
+            list_to_binary(Html2)
     end,
 
-    ale_pd:yaws(html, Html2),
-    Html2.
+    ale_pd:yaws(html, Html),
+    Html.
 
 %% Returns HTML if there is a view to render.
 handle_request4(LongController, Action, Args) ->
@@ -205,6 +275,7 @@ handle_request4(LongController, Action, Args) ->
 
         View2 ->
             Ehtml = View2:render(),
+
             % Because the result may be cached, we convert to HTML then to
             % binary for efficiency
             Html = yaws_api:ehtml_expand(Ehtml),

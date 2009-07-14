@@ -10,5 +10,6 @@ start_link(ServersFile) ->
     application:start(merle),
     ignore.
 
+r(Key)               -> ale_cache_memcached:r(Key).
 r(Key, Fun, Options) -> ale_cache_memcached:r(Key, Fun, Options).
-u(Key, Fun, Options) -> ale_cache_memcached:u(Key, Fun, Options).
+w(Key, Fun, Options) -> ale_cache_memcached:w(Key, Fun, Options).
