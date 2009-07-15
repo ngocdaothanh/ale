@@ -12,29 +12,24 @@ start_link(SizeInMB) ->
 r(Key) ->
     case gen_server2:call(?MODULE, Key, infinity) of
         {ok, Binary} ->
+            log4erl:debug("Cache Hit: ~p", [Key]),
             Value = case Binary of
                 <<?MAGIC, Rest/binary>> -> binary_to_term(Rest);
                 _                       -> Binary
             end,
             {ok, Value};
 
-        not_found -> not_found
+        not_found ->
+            log4erl:debug("Cache Miss: ~p", [Key]),
+            not_found
     end.
 
 r(Key, Fun, Options) ->
     % This cannot be done in 1 call to the gen_server, see NOTE in ale_cache
     % about Fun
     case r(Key) of
-        {ok, Binary} ->
-            Value = case Binary of
-                <<?MAGIC, Rest/binary>> -> binary_to_term(Rest);
-                _                       -> Binary
-            end,
-            Value;
-
-        not_found ->
-            error_logger:info_msg("Cache Miss: ~p", [Key]),
-            w(Key, Fun, Options)
+        {ok, Value} -> Value;
+        not_found   -> w(Key, Fun, Options)
     end.
 
 w(Key, Fun, Options) ->
@@ -60,6 +55,7 @@ handle_cast({Key, Value}, C) ->
 
         true  -> Value
     end,
+    log4erl:debug("Cache Write: ~p", [Key]),
     cherly:put(C, Key, Binary),
     {noreply, C}.
 

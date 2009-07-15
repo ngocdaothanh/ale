@@ -11,19 +11,6 @@ yaws(Key, Value1, Value2)         -> erlang:put(?KEY(yaws, Key), {Value1, Value2
 yaws(Key, Value1, Value2, Value3) -> erlang:put(?KEY(yaws, Key), {Value1, Value2, Value3}).
 yaws(Key)                         -> erlang:get(?KEY(yaws, Key)).
 
-%% Returns the list to be sent to Yaws as the result of Yaws' out/1.
-yaws() ->
-    lists:foldr(
-        fun
-            ({{yaws, Key}, {Value1, Value2, Value3}}, Acc) -> [{Key, Value1, Value2, Value3} | Acc];
-            ({{yaws, Key}, {Value1, Value2        }}, Acc) -> [{Key, Value1, Value2        } | Acc];
-            ({{yaws, Key},  Value                  }, Acc) -> [{Key, Value}                  | Acc];
-            (_                                      , Acc) ->                                  Acc
-        end,
-        [],
-        erlang:get()
-    ).
-
 app(Key, Value) -> erlang:put(?KEY(app, Key), Value).
 
 app(Key) ->
@@ -38,7 +25,16 @@ app(Key) ->
     % the action.
     case ale(variables_for_layout) of
         undefined -> ok;
-        VFL       -> ale(variables_for_layout, [{Key, Value} | VFL])
+
+        VFL ->
+            % Avoid caching variables put by filters, only cache the variables
+            % put by the action. Moreover, avoid adding {Key, Value} more than
+            % one time.
+            ActionKeys = ale_pd:ale(action_keys),
+            case lists:member(Key, ActionKeys) andalso not proplists:is_defined(Key, VFL) of
+                true  -> ale(variables_for_layout, [{Key, Value} | VFL]);
+                false -> ok
+            end
     end,
     Value.
 
@@ -92,3 +88,44 @@ controller(Controller) -> ale(controller, Controller).
 action(Action)         -> ale(action, Action).
 
 content_for_layout(Value) -> ale(content_for_layout, Value).
+
+%-------------------------------------------------------------------------------
+
+%% Returns all variables for one type.
+%%%
+%% get(yaws) may be used to get the list to be sent to Yaws as the result of out/1.
+%%
+%% Type: yaws | app | ale
+get(Type) ->
+    lists:foldr(
+        fun
+            ({{Type2, Key}, {Value1, Value2, Value3}}, Acc) when Type2 == Type ->
+                [{Key, Value1, Value2, Value3} | Acc];
+
+            ({{Type2, Key}, {Value1, Value2        }}, Acc) when Type2 == Type ->
+                [{Key, Value1, Value2        } | Acc];
+
+            ({{Type2, Key},  Value                  }, Acc) when Type2 == Type ->
+                [{Key, Value}                  | Acc];
+
+            (_                                       , Acc)                    ->
+                                                 Acc
+        end,
+        [],
+        erlang:get()
+    ).
+
+%% Returns all keys for one type.
+%%
+%% Type: yaws | app | ale
+keys(Type) ->
+    lists:foldr(
+        fun
+            ({{Type2, Key}, {_Value1, _Value2, _Value3}}, Acc) when Type2 == Type -> [Key | Acc];
+            ({{Type2, Key}, {_Value1, _Value2         }}, Acc) when Type2 == Type -> [Key | Acc];
+            ({{Type2, Key},  _Value                    }, Acc) when Type2 == Type -> [Key | Acc];
+            (_                                         , Acc)                     ->        Acc
+        end,
+        [],
+        erlang:get()
+    ).

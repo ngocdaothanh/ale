@@ -1,23 +1,36 @@
-Ale is a thin layer above Yaws to make web development with Yaws easier. It
-provides:
+Ale is a thin layer above Yaws to make web development with Yaws easier.
+
+It provides:
 * Sinatra-like routes (http://github.com/sinatra/sinatra)
-* i18n with Gettext
+* i18n
 * Distributed memory caching for pages, actions, fragments, and objects
 * Some conventions
 
+It uses:
+* Yaws:    http://wiki.github.com/klacke/yaws
+* Log4erl: http://github.com/ahmednawras/log4erl
+* Gettext:
+* Cherly:  http://github.com/cliffmoon/cherly
+
+You should use Log4erl instead of error_logger:
+http://groups.google.com/group/erlang-programming/browse_thread/thread/447c187a1f3235b3/475bf288c089d7ae
+
 == Install and Create New Project
 
-Dependent libraries:
-* Yaws 1.84
+Install Ale and libraries listed in "It uses" in the above section to Erlang
+lib directory.
 
-TODO
+There's no "generate" script. To create a new project, simply copy "skel"
+directory to some place and modify.
 
-== Routes
+== Routes and url_for
 
 A route maps method and URI to controller and action. Routes are defined in
-controllers.
+controllers as a module attribute.
 
-routes() -> [
+-module(c_articles).
+
+-routes([
 	get,    "/articles",         index,
 	get,    "/articles/Id",      show,
 	get,    "/articles/new",     new,
@@ -25,11 +38,19 @@ routes() -> [
 	get,    "/articles/Id/edit", edit,
 	put,    "/articles/Id",      update,
 	delete, "/articles/Id",      delete
-].
+]).
 
-Fixed parts are in lower case, variable parts are captitalized.
+index()  -> ...
+show(Id) -> ... (Id is a string)
 
-Function names are used so that filters can used their names.
+Fixed parts are in lower case, variable parts are captitalized. Function names
+can be used in filters.
+
+Use ale:url_for to generate URL (io list) back from controller, action, and
+variables:
+
+url_for(articles, index)        % => ["/", "articles"]
+url_for(articles, show, ["1"])  % => ["/", "articles", "/", "1"]
 
 == c_application
 

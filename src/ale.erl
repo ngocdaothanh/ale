@@ -43,15 +43,27 @@ script()       -> ale_pd:script().
 
 uri() -> ale_pd:uri().
 
-url_for(Controller, Action)       -> ale_routes:url_for(Controller, Action, []).
-url_for(Controller, Action, Args) -> ale_routes:url_for(Controller, Action, Args).
+url_for(Controller, Action) -> ale_routes:url_for(Controller, Action, []).
+
+%% Args must be a list. If the a list element is an integer or a float, Ale will
+%% convert it to a string so that Args become a list of strings.
+url_for(Controller, Action, Args) ->
+    Args2 = lists:map(
+        fun
+            (Arg) when is_integer(Arg)-> integer_to_list(Arg);
+            (Arg) when is_float(Arg)  -> float_to_list(Arg);
+            (Arg) -> Arg
+        end,
+        Args
+    ),
+    ale_routes:url_for(Controller, Action, Args2).
 
 %-------------------------------------------------------------------------------
 
 %% Returns {ok, Value} or not_found.
-c(Key) -> ale_cache:c(Key).
+cache(Key) -> ale_cache:c(Key).
 
-c(Key, Fun) -> c(Key, Fun, []).
+cache(Key, Fun) -> cache(Key, Fun, []).
 
 %% Tries to read cache and returns value. If not found then runs Fun to get
 %% value, write then returns it. Note that the return value form is different
@@ -68,7 +80,7 @@ c(Key, Fun) -> c(Key, Fun, []).
 %%   iolist           : the return value of Fun is io list and will be converted to binary
 %%   {ttl, Seconds}   : time to live until cache is expired
 %%   {slide, Boolean} : slide expiration if the cached object is read
-c(Key, Fun, Options) -> ale_cache:c(Key, Fun, Options).
+cache(Key, Fun, Options) -> ale_cache:c(Key, Fun, Options).
 
 %-------------------------------------------------------------------------------
 

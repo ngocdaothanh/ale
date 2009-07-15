@@ -69,7 +69,7 @@ out(Arg) ->
                             end
                     end
             end,
-            ale_pd:yaws()
+            ale_pd:get(yaws)
     end.
 
 out404(_Arg, _GC, _SC) ->
@@ -78,7 +78,7 @@ out404(_Arg, _GC, _SC) ->
         undefined -> ignore;
         View      -> ale_pd:yaws(ehtml, View:render())
     end,
-    ale_pd:yaws().
+    ale_pd:get(yaws).
 
 %-------------------------------------------------------------------------------
 
@@ -87,13 +87,16 @@ out404(_Arg, _GC, _SC) ->
 %% directly by yaws_sup because yaws_sup is configured as "one_for_all", thus
 %% Yaws is stopped if any of the children dies.
 start_children(SC) ->
+    application:start(log4erl),
+    log4erl:conf("log4erl.conf"),
+
     ChildSpec = {
         ale, {supervisor, start_link, [?MODULE, SC]},
         permanent, infinity, supervisor, [ale_yaws_mod]
     },
     case supervisor:start_child(yaws_sup, ChildSpec) of
         {error, Reason} ->
-            error_logger:error_msg("Error starting Ale application:~n~p~n", [Reason]),
+            log4erl:error("Error starting Ale application:~n~p", [Reason]),
             {error, Reason};
 
         X -> X
@@ -132,7 +135,7 @@ rest_method(Arg) ->
     end.
 
 handle_request1(Arg, Method, Uri, LongController, Action, Args) ->
-    case page_cached(LongController, Action) of
+    case ale_is_cached:is_cached(LongController, page, Action) of
         true ->
             Html = ale_cache:c(Uri, fun() ->
                 handle_request2(Arg, Method, Uri, LongController, Action, Args)
@@ -159,7 +162,7 @@ handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
         true -> ignore;    % Can't be page cached because halted by a before filter
 
         false ->
-            case action_cached_with_layout(LongController, Action) of
+            case ale_is_cached:is_cached(LongController, action_with_layout, Action) of
                 true ->
                     Html = ale_cache:c(Uri, fun() ->
                         handle_request3(Uri, LongController, Action, Args)
@@ -172,7 +175,7 @@ handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
 
 %% Returns HTML if there is a view to render.
 handle_request3(Uri, LongController, Action, Args) ->
-    ActionCachedWithoutLayout = action_cached_without_layout(LongController, Action),
+    ActionCachedWithoutLayout = ale_is_cached:is_cached(LongController, action_without_layout, Action),
     {ContentForLayout, FromCache} = case ActionCachedWithoutLayout of
         true ->
             % If taken from cache then it is binary or list:
@@ -242,13 +245,14 @@ handle_request3(Uri, LongController, Action, Args) ->
 
                             % If the layout did not use any variable from the action or
                             % its view, we only need to cache the content. Otherwise
-                            % we need to cache the content and variables.
+                            % we need to cache both the content and variables.
                             VFL = ale_pd:ale(variables_for_layout),
+
                             ThingToCache = case length(VFL) of
                                 0 -> ContentForLayout;
                                 _ -> [{content_for_layout, ContentForLayout} | VFL]
                             end,
-                            ale_cache:c(Uri, fun() -> ThingToCache end),
+                            ale_cache:c(Uri, fun() -> ThingToCache end, w),
 
                             Ehtml2
                     end
@@ -268,7 +272,18 @@ handle_request4(LongController, Action, Args) ->
     View = controller_to_view(LongController, Action),
     ale_pd:view(View),
 
-    apply(LongController, Action, Args),
+    % If the action is cached without layout, then variables introduced by this
+    % action are remembered so that ale_pd:app/1 can cache them
+    case ale_is_cached:is_cached(LongController, action_without_layout, Action) of
+        false -> apply(LongController, Action, Args);
+
+        true ->
+            Keys1 = ale_pd:keys(app),
+            apply(LongController, Action, Args),
+            Keys2 = ale_pd:keys(app),
+            ActionKeys = Keys2 -- Keys1,
+            ale_pd:ale(action_keys, ActionKeys)
+    end,
 
     case ale_pd:view() of
         undefined -> ignore;    % Layout is not called if there is no view
@@ -280,27 +295,6 @@ handle_request4(LongController, Action, Args) ->
             % binary for efficiency
             Html = yaws_api:ehtml_expand(Ehtml),
             list_to_binary(Html)
-    end.
-
-page_cached(LongController, Action) ->
-    code:ensure_loaded(LongController),
-    case erlang:function_exported(LongController, cached_pages, 0) of
-        true  -> lists:member(Action, LongController:cached_pages());
-        false -> false
-    end.
-
-action_cached_with_layout(LongController, Action) ->
-    code:ensure_loaded(LongController),
-    case erlang:function_exported(LongController, cached_actions_with_layout, 0) of
-        true  -> lists:member(Action, LongController:cached_actions_with_layout());
-        false -> false
-    end.
-
-action_cached_without_layout(LongController, Action) ->
-    code:ensure_loaded(LongController),
-    case erlang:function_exported(LongController, cached_actions_without_layout, 0) of
-        true  -> lists:member(Action, LongController:cached_actions_without_layout());
-        false -> false
     end.
 
 %% Returns true if the action should be halted.
