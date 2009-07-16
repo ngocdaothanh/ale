@@ -11,8 +11,8 @@ gen() ->
         fun(FileName, Acc) ->
             BaseName = filename:basename(FileName, ".beam"),
             io:format("  ~s...\n", [BaseName]),
-            Controller = list_to_atom(BaseName),
-            case parse(Controller) of
+            ControllerModule = list_to_atom(BaseName),
+            case parse(ControllerModule) of
                 undefined -> Acc;
                 Form      -> [Form | Acc]
             end
@@ -26,23 +26,22 @@ gen() ->
 
         "-export([is_cached/3]).\n",
 
-        gen_is_cached(Forms),
+        is_cached_gen(Forms),
         "\nis_cached(_, _, _) -> false.\n"
     ],
     file:write_file("ale_is_cached.erl", Source).
 
 %-------------------------------------------------------------------------------
 
-%% Returns {Controller, [{Type, Action}]}
-parse(Controller) ->
-    Attributes = Controller:module_info(attributes),
+%% Returns {ControllerModule, [{Type, Action}]}
+parse(ControllerModule) ->
+    Attributes = ControllerModule:module_info(attributes),
     case proplists:get_value(caches, Attributes) of
         undefined -> undefined;
-        Caches    -> {Controller, parse(Caches, [])}
+        Caches    -> {ControllerModule, parse(Caches, [])}
     end.
 
-parse([], Acc) ->
-    lists:reverse(lists:flatten(Acc));
+parse([], Acc) -> lists:reverse(lists:flatten(Acc));
 parse([Type, Actions | Rest], Acc) ->
     TypeActionList = lists:foldr(
         fun(Action, Acc2) ->
@@ -55,19 +54,19 @@ parse([Type, Actions | Rest], Acc) ->
 
 %-------------------------------------------------------------------------------
 
-gen_is_cached(Forms) ->
+is_cached_gen(Forms) ->
     lists:foldl(
-        fun({Controller, TypeActionList}, Acc) ->
+        fun({ControllerModule, TypeActionList}, Acc) ->
             [
                 Acc, "\n",
-                "% ", atom_to_list(Controller), "\n",
+                "% ", atom_to_list(ControllerModule), "\n",
                 lists:foldl(
                     fun({Type, Action}, Acc2) ->
                         [
                             Acc2,
                             io_lib:format(
                                 "is_cached(~p, ~p, ~p) -> true;\n",
-                                [Controller, Type, Action]
+                                [ControllerModule, Type, Action]
                             )
                         ]
                     end,

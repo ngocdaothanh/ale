@@ -31,26 +31,26 @@ controllers as a module attribute.
 -module(c_articles).
 
 -routes([
-	get,    "/articles",         index,
-	get,    "/articles/Id",      show,
-	get,    "/articles/new",     new,
-	post,   "/articles",         create,
-	get,    "/articles/Id/edit", edit,
-	put,    "/articles/Id",      update,
-	delete, "/articles/Id",      delete
+	get,    "/articles",          index,
+	get,    "/articles/:id",      show,
+	get,    "/articles/new",      new,
+	post,   "/articles",          create,
+	get,    "/articles/:id/edit", edit,
+	put,    "/articles/:id",      update,
+	delete, "/articles/:id",      delete
 ]).
 
-index()  -> ...
-show(Id) -> ... (Id is a string)
+index() -> ...
+show()  -> Id = list_to_integer(ale:params(id))...
 
 Fixed parts are in lower case, variable parts are captitalized. Function names
 can be used in filters.
 
-Use ale:url_for to generate URL (io list) back from controller, action, and
+Use url_for to generate URL (io list) back from controller, action, and
 variables:
 
-url_for(articles, index)        % => ["/", "articles"]
-url_for(articles, show, ["1"])  % => ["/", "articles", "/", "1"]
+ale:url_for(articles, index)      % => ["/", "articles"]
+ale:url_for(articles, show, [1])  % => ["/", "articles", "/", "1"]
 
 == c_application
 
@@ -60,35 +60,47 @@ This controller defines common functionalities for all other controllers:
 * Layout
 * Filters
 
-== Order of Function Calling
+== Process Dictionary
+
+Each HTTP request is served by one process.
 
 Before filters -> Action -> View -> Layout.
 
-== Action
+Process dictionary is used to pass variables from a layer to layers after it.
+Use ale:app(Key, Value) to put and ale:app(Key) to get.
+
+Special keys for ale:app/1:
+* controller
+* action
+* content_for_layout
+* script
+
+For the caching to work properly, you should not change things after putting them
+to the process dictionary.
+
+== Action and View
 
 Each request is processed by a separate process. For convinience, output to Yaws
-is not forced to be the last line of your action. Use ale:put/3-5 to put things
-to namespaces in the process dictionary. Things in the "yaws" namespace will be
-collected into a list and sent to Yaws.
-
-== View
+is not forced to be the last line of your action. Use ale:yaws and ale:app to
+put things to namespaces in the process dictionary. Things in the "yaws"
+namespace will be collected and sent to Yaws.
 
 If your controller is c_hello and action is world, v_hello_world:render/0 will
-be called. Your action should call ale:app(Key, Thing) to put things to the
-"app" namespace, your view should call ale:app(Key) to get things back.
-
-If you want to use a view other than the default view, in your action call
-ale:view(ViewModule).
+be called. If you want to use a view other than the default view, in your action
+call ale:view(Action) or ale:view(Controller, Action).
 
 If there is no default view or the specified view does not exist, no view will
 be called. If you do not want to use a view, just don't create the default view,
-or call ale:erase(ale, view). In this case layout will also not be called.
+or call ale:view(undefined). In this case layout will also not be called.
+
+If you want to send something directly to Yaws, call ale:view(undefined) and call
+ale:yaws/2-4. See http://yaws.hyber.org/yman.yaws?page=yaws_api.
 
 == Layout
 
 To output your view with a layout, call ale:layout(LayoutModule).
 LayoutModule:render/0 will be called. To get the rendered view, in your layout
-call ale:content_for_layout().
+call ale:app(content_for_layout).
 
 == JavaScript
 

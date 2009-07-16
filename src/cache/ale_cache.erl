@@ -42,12 +42,29 @@ start_link(SC, Nodes) ->
 
 %-------------------------------------------------------------------------------
 
-c(Key) ->
+%% Returns {ok, Value} or not_found.
+cache(Key) ->
     Module = cache_module(),
     Module:r(Key).
 
-c(Key, Fun) -> c(Key, Fun, []).
-c(Key, Fun, Options) ->
+cache(Key, Fun) -> cache(Key, Fun, []).
+
+%% Tries to read cache and returns value. If not found then runs Fun to get
+%% value, write then returns it. Note that the return value form is different
+%% from that of c/1.
+%%
+%% If you want to cache string or io list, for efficiency remember to set
+%% Options to ask this function to convert it to binary before caching so that
+%% serializing/deserializing is not performed every time the cache is read.
+%%
+%% Options:
+%%   w                : always use Fun to write to the cache, e.g. overwrite any existing value
+%%   ehtml            : the return value of Fun is EHTML and will be converted to HTML then to binary
+%%   ehtmle           : the return value of Fun is EHTML and will be converted to HTML then to binary
+%%   iolist           : the return value of Fun is io list and will be converted to binary
+%%   {ttl, Seconds}   : time to live until cache is expired
+%%   {slide, Boolean} : slide expiration if the cached object is read
+cache(Key, Fun, Options) ->
     Options2 = case is_list(Options) of
         false -> [Options];
         true  -> Options

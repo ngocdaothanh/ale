@@ -42,16 +42,18 @@ out(Arg) ->
             case ale_routes:route_uri(Method, Uri) of
                 no_route ->
                     c_application:error_404(),
-                    case ale_pd:view() of
-                        undefined -> ignore;
-                        View      -> ale_pd:yaws(ehtml, View:render())
+                    case ale_pd:view_module() of
+                        undefined  -> ignore;
+                        ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
                     end;
 
-                % Long:  c_hello
-                % Short: hello
-                {LongController, Action, Args} ->
+                {ControllerModule, Action, Params} ->
                     try
-                        handle_request1(Arg, Method, Uri, LongController, Action, Args)
+                        Params2 = lists:map(
+                            fun({Key, Value}) -> {Key, yaws_api:url_decode(Value)} end,
+                            Params
+                        ),
+                        handle_request1(Arg, Method, Uri, ControllerModule, Action, Params2)
                     catch
                         Type : Reason ->
                             error_logger:error_report([
@@ -63,9 +65,9 @@ out(Arg) ->
                             % Type and Reason are more convenient than those
                             % arguments of Yaws' errormod_crash
                             c_application:error_500(Type, Reason),
-                            case ale_pd:view() of
-                                undefined -> ignore;
-                                View      -> ale_pd:yaws(ehtml, View:render())
+                            case ale_pd:view_module() of
+                                undefined  -> ignore;
+                                ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
                             end
                     end
             end,
@@ -74,9 +76,9 @@ out(Arg) ->
 
 out404(_Arg, _GC, _SC) ->
     c_application:error_404(),
-    case ale_pd:view() of
-        undefined -> ignore;
-        View      -> ale_pd:yaws(ehtml, View:render())
+    case ale_pd:view_module() of
+        undefined  -> ignore;
+        ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
     end,
     ale_pd:get(yaws).
 
@@ -134,56 +136,79 @@ rest_method(Arg) ->
             end
     end.
 
-handle_request1(Arg, Method, Uri, LongController, Action, Args) ->
-    case ale_is_cached:is_cached(LongController, page, Action) of
+handle_request1(Arg, Method, Uri, ControllerModule, Action, Params) ->
+    case ale_is_cached:is_cached(ControllerModule, page, Action) of
         true ->
-            Html = ale_cache:c(Uri, fun() ->
-                handle_request2(Arg, Method, Uri, LongController, Action, Args)
+            Html = ale_cache:cache(Uri, fun() ->
+                handle_request2(Arg, Method, Uri, ControllerModule, Action, Params)
             end),
             ale_pd:yaws(html, Html);
 
-        false -> handle_request2(Arg, Method, Uri, LongController, Action, Args)
+        false -> handle_request2(Arg, Method, Uri, ControllerModule, Action, Params)
     end.
 
 %% Returns HTML if the request is not halted by a before filter or action cached.
-handle_request2(Arg, Method, Uri, LongController, Action, Args) ->
+handle_request2(Arg, Method, Uri, ControllerModule, Action, Params) ->
     % Set environment variables to the process dictionary here (not in
     % handle_request1 because they are not used there) because the application
     % may need these variables
     ale_pd:arg(Arg),
     ale_pd:method(Method),
     ale_pd:uri(Uri),
-    [$c, $_ | ControllerS] = atom_to_list(LongController),
-    Controller = list_to_atom(ControllerS),
-    ale_pd:controller(Controller),
-    ale_pd:action(Action),
 
-    case run_before_filters(LongController, Action, Args) of
+    % Keys of params are always string to avoid list_to_atom attack
+    % For convenience, application developer may use ale:params(Atom)
+
+    % Put 'POST' params first
+    % Ale does not support 'GET' params because they makes the URI ugly (?foo=bar etc.)
+    case not (Method == get) of
+        true ->
+            PostParams = yaws_api:parse_post(Arg),
+            lists:foreach(
+                fun({Key, Value}) -> ale_pd:params(Key, Value) end,
+                PostParams
+            );
+
+        false -> ok
+    end,
+
+    % Put params on URI later
+    lists:foreach(
+        fun({Key, Value}) -> ale_pd:params(Key, Value) end,
+        Params
+    ),
+
+    % Lastly put controller and action params
+    Controller = cm2c(ControllerModule),
+    ale_pd:params("controller", Controller),
+    ale_pd:params("action", Action),
+
+    case run_before_filters(ControllerModule, Action) of
         true -> ignore;    % Can't be page cached because halted by a before filter
 
         false ->
-            case ale_is_cached:is_cached(LongController, action_with_layout, Action) of
+            case ale_is_cached:is_cached(ControllerModule, action_with_layout, Action) of
                 true ->
-                    Html = ale_cache:c(Uri, fun() ->
-                        handle_request3(Uri, LongController, Action, Args)
+                    Html = ale_cache:cache(Uri, fun() ->
+                        handle_request3(Uri, ControllerModule, Action)
                     end),
                     ale_pd:yaws(html, Html);    % Can't be page cached because action cached
 
-                false -> handle_request3(Uri, LongController, Action, Args)
+                false -> handle_request3(Uri, ControllerModule, Action)
             end
     end.
 
 %% Returns HTML if there is a view to render.
-handle_request3(Uri, LongController, Action, Args) ->
-    ActionCachedWithoutLayout = ale_is_cached:is_cached(LongController, action_without_layout, Action),
+handle_request3(Uri, ControllerModule, Action) ->
+    ActionCachedWithoutLayout = ale_is_cached:is_cached(ControllerModule, action_without_layout, Action),
     {ContentForLayout, FromCache} = case ActionCachedWithoutLayout of
         true ->
             % If taken from cache then it is binary or list:
             % * If list, it is:
             % [{content_for_layout, Binary} | Variables to be put to process dictionary for layout to use]
             % * If binary, it is content_for_layout
-            case ale_cache:c(Uri) of
-                not_found -> {handle_request4(LongController, Action, Args), false};
+            case ale_cache:cache(Uri) of
+                not_found -> {handle_request4(ControllerModule, Action), false};
 
                 {ok, BinaryOrList} ->
                     case is_binary(BinaryOrList) of
@@ -206,10 +231,10 @@ handle_request3(Uri, LongController, Action, Args) ->
 
         false ->
             % Binary
-            {handle_request4(LongController, Action, Args), undefined}
+            {handle_request4(ControllerModule, Action), undefined}
     end,
 
-    Html = case ale_pd:layout() of
+    Html = case ale_pd:layout_module() of
         undefined ->
             case ActionCachedWithoutLayout of
                 false -> ok;
@@ -218,17 +243,17 @@ handle_request3(Uri, LongController, Action, Args) ->
                 true ->
                     case FromCache of
                         true  -> ok;
-                        false -> ale_cache:c(Uri, fun() -> ContentForLayout end)
+                        false -> ale_cache:cache(Uri, fun() -> ContentForLayout end)
                     end
             end,
             ContentForLayout;
 
-        Layout ->
-            ale_pd:content_for_layout(ContentForLayout),
+        LayoutModule ->
+            ale_pd:app(content_for_layout, ContentForLayout),
 
             % See above and ale_pd:app/1
             Ehtml = case ActionCachedWithoutLayout of
-                false -> Layout:render();
+                false -> LayoutModule:render();
 
                 true ->
                     % Cache ContentForLayout if is was not from cache
@@ -236,12 +261,12 @@ handle_request3(Uri, LongController, Action, Args) ->
                         true ->
                             % Things have been put into the process dictionary above
                             % we just need to render the layout
-                            Layout:render();
+                            LayoutModule:render();
 
                         false ->
                             % Variables for layout will be accumulated in ale_pd:app/2
                             ale_pd:ale(variables_for_layout, []),
-                            Ehtml2 = Layout:render(),
+                            Ehtml2 = LayoutModule:render(),
 
                             % If the layout did not use any variable from the action or
                             % its view, we only need to cache the content. Otherwise
@@ -252,13 +277,13 @@ handle_request3(Uri, LongController, Action, Args) ->
                                 0 -> ContentForLayout;
                                 _ -> [{content_for_layout, ContentForLayout} | VFL]
                             end,
-                            ale_cache:c(Uri, fun() -> ThingToCache end, w),
+                            ale_cache:cache(Uri, fun() -> ThingToCache end, w),
 
                             Ehtml2
                     end
             end,
 
-            % Because the result may be cached, we convert to HTML then to
+            % Because the result may be cached, we convert EHTML to HTML (io list)
             % binary for efficiency
             Html2 = yaws_api:ehtml_expand(Ehtml),
             list_to_binary(Html2)
@@ -268,47 +293,58 @@ handle_request3(Uri, LongController, Action, Args) ->
     Html.
 
 %% Returns HTML if there is a view to render.
-handle_request4(LongController, Action, Args) ->
-    View = controller_to_view(LongController, Action),
-    ale_pd:view(View),
+handle_request4(ControllerModule, Action) ->
+    % Set default view before calling action, the action may change
+    ale_pd:view(Action),
+
+    ActionCachedWithoutLayout = ale_is_cached:is_cached(ControllerModule, action_without_layout, Action),
 
     % If the action is cached without layout, then variables introduced by this
     % action are remembered so that ale_pd:app/1 can cache them
-    case ale_is_cached:is_cached(LongController, action_without_layout, Action) of
-        false -> apply(LongController, Action, Args);
+    case ActionCachedWithoutLayout of
+        false ->
+            Keys1 = [],  % Just for suppressing compile time warning
+            ControllerModule:Action();
 
         true ->
             Keys1 = ale_pd:keys(app),
-            apply(LongController, Action, Args),
-            Keys2 = ale_pd:keys(app),
-            ActionKeys = Keys2 -- Keys1,
-            ale_pd:ale(action_keys, ActionKeys)
+            ControllerModule:Action()
     end,
 
-    case ale_pd:view() of
-        undefined -> ignore;    % Layout is not called if there is no view
+    case ale_pd:view_module() of
+        undefined -> ok;    % Layout is not called if there is no view
 
-        View2 ->
-            Ehtml = View2:render(),
+        ViewModule ->
+            Ehtml = ViewModule:render(),
+            case ActionCachedWithoutLayout of
+                false -> ok;
 
-            % Because the result may be cached, we convert to HTML then to
-            % binary for efficiency
+                true ->
+                    Keys2 = ale_pd:keys(app),
+                    ActionKeys = Keys2 -- Keys1,
+                    ale_pd:ale(action_keys, ActionKeys)
+            end,
+
+            % Because the result may be cached, we convert EHTML to HTML (io list)
+            % then to binary for efficiency
             Html = yaws_api:ehtml_expand(Ehtml),
             list_to_binary(Html)
     end.
 
 %% Returns true if the action should be halted.
-run_before_filters(LongController, Action, Args) ->
-    case erlang:function_exported(c_application, before_filter, 3) andalso
-        c_application:before_filter(ale_pd:controller(), Action, Args) of
+run_before_filters(ControllerModule, Action) ->
+    case erlang:function_exported(c_application, before_filter, 2) andalso
+        c_application:before_filter(ControllerModule, Action) of
         true -> true;
 
         false ->
-            erlang:function_exported(LongController, before_filter, 2) andalso
-                LongController:before_filter(Action, Args)
+            erlang:function_exported(ControllerModule, before_filter, 1) andalso
+                ControllerModule:before_filter(Action)
     end.
 
-%% Converts c_hello and show to v_hello_show
-controller_to_view(LongController, Action) ->
-    [$c, $_ | Base] = atom_to_list(LongController),
-    list_to_atom("v_" ++ Base ++ "_" ++ atom_to_list(Action)).
+%-------------------------------------------------------------------------------
+
+%% Converts c_hello to hello.
+cm2c(ControllerModule) ->
+    [$c, $_ | ControllerS] = atom_to_list(ControllerModule),
+    list_to_atom(ControllerS).

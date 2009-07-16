@@ -6,6 +6,12 @@
 
 -define(KEY(Namespace, Key), {Namespace, Key}).
 
+%-------------------------------------------------------------------------------
+% There are 3 namespaces:
+% * yaws: used to return things directly to Yaws
+% * app:  used by the application
+% * ale:  used by Ale framework
+
 yaws(Key, Value)                  -> erlang:put(?KEY(yaws, Key), Value).
 yaws(Key, Value1, Value2)         -> erlang:put(?KEY(yaws, Key), {Value1, Value2}).
 yaws(Key, Value1, Value2, Value3) -> erlang:put(?KEY(yaws, Key), {Value1, Value2, Value3}).
@@ -13,8 +19,30 @@ yaws(Key)                         -> erlang:get(?KEY(yaws, Key)).
 
 app(Key, Value) -> erlang:put(?KEY(app, Key), Value).
 
+%% This function is special. It accumulates JavaScripts.
+app_add_script(Script) ->
+    % Avoid calling app(Key) because of the special cache handling
+    case erlang:get(?KEY(app, script)) of
+        undefined -> app(script, Script);
+        IoList    -> app(script, [IoList, Script])
+    end.
+
+%% Key script is special. For this key this function returns
+%% {script, [{type, "text/javascript"}], accumulated scripts}.
+%% For convenience, if there is no script it returns empty string.
 app(Key) ->
-    Value = erlang:get(?KEY(app, Key)),
+    Value1 = erlang:get(?KEY(app, Key)),
+
+    % script is special
+    Value2 = case Key of
+        script ->
+            case Value1 of
+                undefined -> "";
+                IoList    -> {script, [{type, "text/javascript"}], IoList}
+            end;
+
+        _ -> Value1
+    end,
 
     % Trick:
     % If
@@ -32,62 +60,14 @@ app(Key) ->
             % one time.
             ActionKeys = ale_pd:ale(action_keys),
             case lists:member(Key, ActionKeys) andalso not proplists:is_defined(Key, VFL) of
-                true  -> ale(variables_for_layout, [{Key, Value} | VFL]);
+                true  -> ale(variables_for_layout, [{Key, Value2} | VFL]);
                 false -> ok
             end
     end,
-    Value.
-
-%-------------------------------------------------------------------------------
-
-arg()        -> ale(arg).
-method()     -> ale(method).
-uri()        -> ale(uri).
-controller() -> ale(controller).
-action()     -> ale(action).
-
-layout(Value) -> ale(layout, Value).
-layout()      -> ale(layout).
-
-view(Value) -> ale(view, Value).
-view()      -> ale(view).
-
-content_for_layout() -> ale(content_for_layout).
-
-%% Accumulates Script.
-script(Script) ->
-    case ale(script) of
-        undefined -> ale(script, Script);
-        IoList    -> ale(script, [IoList, Script])
-    end.
-
-%% Returns {script, [{type, "text/javascript"}], accumulated scripts}. If there
-%% is no script returns "" (not undefined for convenience because this function
-%% is used in layout).
-script() ->
-    case ale(script) of
-        undefined -> "";
-        IoList    -> {script, [{type, "text/javascript"}], IoList}
-    end.
-
-%-------------------------------------------------------------------------------
-
-url_for(Controller, Action)       -> ale_routes:url_for(Controller, Action, []).
-url_for(Controller, Action, Args) -> ale_routes:url_for(Controller, Action, Args).
-
-%-------------------------------------------------------------------------------
-% These functions are used internally by Ale.
+    Value2.
 
 ale(Key, Value) -> erlang:put(?KEY(ale, Key), Value).
 ale(Key)        -> erlang:get(?KEY(ale, Key)).
-
-arg(Arg)               -> ale(arg, Arg).
-method(Method)         -> ale(method, Method).
-uri(Uri)               -> ale(uri, Uri).
-controller(Controller) -> ale(controller, Controller).
-action(Action)         -> ale(action, Action).
-
-content_for_layout(Value) -> ale(content_for_layout, Value).
 
 %-------------------------------------------------------------------------------
 
@@ -129,3 +109,49 @@ keys(Type) ->
         [],
         erlang:get()
     ).
+
+%-------------------------------------------------------------------------------
+
+arg(Arg) -> ale(arg, Arg).
+arg()    -> ale(arg).
+
+method(Method) -> ale(method, Method).
+method()       -> ale(method).
+
+uri(Uri) -> ale(uri, Uri).
+uri()    -> ale(uri).
+
+%% Key: string().
+params(Key, Value) -> erlang:put(?KEY(params, Key), Value).
+
+%% To prevent list_to_atom attack, keys of params in the process dictionary are
+%% strings, but for application development covenience, they can be accessed as
+%% atoms.
+%%
+%% Key: atom()
+params(Key)  ->
+    KeyS = atom_to_list(Key),
+    erlang:get(?KEY(params, KeyS)).
+
+%-------------------------------------------------------------------------------
+
+layout_module(Module) -> ale(layout_module, Module).
+layout_module()       -> ale(layout_module).
+
+view(Action) ->
+    case Action of
+        undefined -> erlang:erase(?KEY(ale, view_module));
+
+        _ ->
+            Controller = ale_pd:params(controller),
+            view(Controller, Action)
+    end.
+
+view(Controller, Action) ->
+    ViewModule = list_to_atom("v_" ++ atom_to_list(Controller) ++ "_" ++ atom_to_list(Action)),
+    ale_pd:ale(view_module, ViewModule).
+
+view_module(Module) ->
+    ale_pd:ale(view_module, Module).
+
+view_module() -> ale(view_module).

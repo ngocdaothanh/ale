@@ -11,8 +11,8 @@ gen() ->
         fun(FileName, Acc) ->
             BaseName = filename:basename(FileName, ".beam"),
             io:format("  ~s...\n", [BaseName]),
-            Controller = list_to_atom(BaseName),
-            case parse(Controller) of
+            ControllerModule = list_to_atom(BaseName),
+            case parse(ControllerModule) of
                 undefined -> Acc;
                 Form      -> [Form | Acc]
             end
@@ -27,34 +27,32 @@ gen() ->
         "-export([route_uri/2, url_for/3]).\n\n"
 
         "route_uri(Method, Uri) -> Tokens = string:tokens(Uri, \"/\"), route_tokens(Method, Tokens).\n",
-        gen_routes(Forms),
+        route_tokens_gen(Forms),
         "\nroute_tokens(_, _) -> no_route.\n",
 
-        gen_url_fors(Forms),
+        url_for_gen(Forms),
         "\nurl_for(_, _, _) -> erlang:error(no_url).\n"
     ],
     file:write_file("ale_routes.erl", Source).
 
 %-------------------------------------------------------------------------------
 
-%% Returns {Controller, [{Method, [{fixed, Token} | {var, Token}], Action}]}
-parse(Controller) ->
-    Attributes = Controller:module_info(attributes),
+%% Returns {ControllerModule, [{Method, [{fixed, Fixed} | {param, Param}], Action}]}.
+parse(ControllerModule) ->
+    Attributes = ControllerModule:module_info(attributes),
     case proplists:get_value(routes, Attributes) of
         undefined -> undefined;
-        Routes    -> {Controller, parse(Routes, [])}
+        Routes    -> {ControllerModule, parse(Routes, [])}
     end.
 
-parse([], Acc) ->
-    lists:reverse(Acc);
+parse([], Acc) -> lists:reverse(Acc);
 parse([Method, Uri, Action | Rest], Acc) ->
     Tokens = string:tokens(Uri, "/"),
     TypedTokens = lists:foldr(
         fun(Token, Acc2) ->
-            FirstChar = hd(Token),
-            case ($a =< FirstChar) andalso (FirstChar =< $z) of
-                true  -> [{fixed, Token} | Acc2];
-                false -> [{var,   Token} | Acc2]
+            case Token of
+                [$:] ++ Param -> [{param, Param} | Acc2];
+                _             -> [{fixed, Token} | Acc2]
             end
         end,
         [],
@@ -64,21 +62,23 @@ parse([Method, Uri, Action | Rest], Acc) ->
 
 %-------------------------------------------------------------------------------
 
-gen_routes(Forms) ->
+%% Converts {c_articles, [{get, [{fixed, "articles"}, {param, "id"}], show}]} to
+%% "route_tokens(get, [\"articles\", Id]) -> {c_articles, show, [{id, Id}]};".
+route_tokens_gen(Forms) ->
     lists:foldl(
-        fun({Controller, Routes}, Acc) ->
+        fun({ControllerModule, Routes}, Acc) ->
             [
                 Acc, "\n",
-                "% ", atom_to_list(Controller), "\n",
+                "% ", atom_to_list(ControllerModule), "\n",
                 lists:foldl(
                     fun({Method, TypedTokens, Action}, Acc2) ->
                         UriPattern = in_uri_pattern(TypedTokens, undefined),
-                        Vars = in_vars(TypedTokens),
+                        Params = in_params(TypedTokens),
                         [
                             Acc2,
                             io_lib:format(
                                 "route_tokens(~p, ~s) -> {~p, ~p, ~s};\n",
-                                [Method, UriPattern, Controller, Action, Vars]
+                                [Method, UriPattern, ControllerModule, Action, Params]
                             )
                         ]
                     end,
@@ -91,13 +91,13 @@ gen_routes(Forms) ->
         Forms
     ).
 
-%% Returns a flat string like ["hello", Name] to be used as the URI pattern to be matched.
+%% Converts [{fixed, "articles"}, {param, "id"}] to "[\"articles\", Id]".
 in_uri_pattern(TypedTokens, Prefix) ->
     Elems = lists:map(
         fun(TypedToken) ->
             case TypedToken of
                 {fixed, Fixed} -> [$"] ++ Fixed ++ [$"];
-                {var,   Var}   -> Var
+                {param, Param} -> snake_to_camel(Param)
             end
         end,
         TypedTokens
@@ -107,39 +107,44 @@ in_uri_pattern(TypedTokens, Prefix) ->
         _         -> [$[] ++ string:join([Prefix | Elems], ", ") ++ [$]]
     end.
 
-%% Returns a flat string like [Name] to be used as the extracted variable parts.
-in_vars(TypedTokens) ->
-    Vars = lists:foldr(
+%% Converts [{fixed, "articles"}, {param, "id"}] to "[{id, Id}]".
+in_params(TypedTokens) ->
+    Params = lists:foldr(
         fun(TypedToken, Acc) ->
             case TypedToken of
-                {fixed, _} -> Acc;
-                {var, Var} -> [["yaws_api:url_decode(", Var, ")"] | Acc]
+                {fixed, _Fixed} -> Acc;
+
+                {param,  Param} ->
+                    C = snake_to_camel(Param),
+                    [["{\"", Param, "\", ", C, "}"] | Acc]
             end
         end,
         [],
         TypedTokens
     ),
-    [$[] ++ string:join(Vars, ", ") ++ [$]].
+    [$[] ++ string:join(Params, ", ") ++ [$]].
 
 %-------------------------------------------------------------------------------
 
-gen_url_fors(Forms) ->
+%% Converts {c_articles, [{get, [{fixed, "articles"}, {param, "id"}], show}]} to
+%% "url_for(articles, show, [{id, Id}]) -> [\"/\", \"articles\", \"/\", Id]".
+url_for_gen(Forms) ->
     lists:foldl(
-        fun({Controller, Routes}, Acc) ->
+        fun({ControllerModule, Routes}, Acc) ->
             [
                 Acc, "\n",
-                "% ", atom_to_list(Controller), "\n",
+                "% ", atom_to_list(ControllerModule), "\n",
                 lists:foldl(
                     fun({_Method, TypedTokens, Action}, Acc2) ->
                         UriPattern = out_uri_pattern(TypedTokens, "\"/\""),
-                        Vars = out_vars(TypedTokens),
-                        [$c, $_ | ShortControllerS] = atom_to_list(Controller),
-                        ShortController = list_to_atom(ShortControllerS),
+                        Params = out_params(TypedTokens),
+                        [$c, $_ | ControllerS] = atom_to_list(ControllerModule),
+                        Controller = list_to_atom(ControllerS),
                         [
                             Acc2,
                             io_lib:format(
                                 "url_for(~p, ~p, ~s) -> ~s;\n",
-                                [ShortController, Action, Vars, UriPattern]
+                                [Controller, Action, Params, UriPattern]
                             )
                         ]
                     end,
@@ -152,13 +157,13 @@ gen_url_fors(Forms) ->
         Forms
     ).
 
-%% Returns a flat string like ["hello", Name] to be used as the URI pattern to be matched.
+%% Converts [{fixed, "articles"}, {param, "id"}] to "[\"articles\", Id]".
 out_uri_pattern(TypedTokens, Prefix) ->
     Elems = lists:map(
         fun(TypedToken) ->
             case TypedToken of
                 {fixed, Fixed} -> [$"] ++ Fixed ++ [$"];
-                {var,   Var}   -> ["yaws_api:url_encode(", Var, ")"]
+                {param, Param} -> snake_to_camel(Param)
             end
         end,
         TypedTokens
@@ -168,16 +173,50 @@ out_uri_pattern(TypedTokens, Prefix) ->
         _         -> [$[] ++ Prefix ++ string:join(Elems, ", \"/\", ") ++ [$]]
     end.
 
-%% Returns a flat string like [Name] to be used as the extracted variable parts.
-out_vars(TypedTokens) ->
-    Vars = lists:foldr(
+%% Converts [{fixed, "articles"}, {param, "id"}] to "[Id]".
+out_params(TypedTokens) ->
+    Params = lists:foldr(
         fun(TypedToken, Acc) ->
             case TypedToken of
-                {fixed, _} -> Acc;
-                {var, Var} -> [Var | Acc]
+                {fixed, _Fixed} -> Acc;
+                {param,  Param} -> [snake_to_camel(Param) | Acc]
             end
         end,
         [],
         TypedTokens
     ),
-    [$[] ++ string:join(Vars, ", ") ++ [$]].
+    [$[] ++ string:join(Params, ", ") ++ [$]].
+
+%-------------------------------------------------------------------------------
+
+%% Converts snake_case to CamelCase.
+snake_to_camel(String) ->
+    % Capitalize
+    [F | Rest] = String,
+    CF = F - 32,  % a: 97, A: 65
+    [CF | snake_to_camel2(Rest)].
+
+snake_to_camel2([]) -> [];
+snake_to_camel2([$_, S | Rest]) ->
+    CS = S - 32,
+    [CS | snake_to_camel2(Rest)];
+snake_to_camel2([H | Rest]) ->
+    [H | snake_to_camel2(Rest)].
+
+%-------------------------------------------------------------------------------
+
+url_for(Controller, Action) -> ale_routes:url_for(Controller, Action, []).
+
+%% Params is not a proplists, just a list of params in the same order as in routes.
+%% If the a param is an integer or a float, It will be converted to string so that
+%% because the return value is an io list of strings.
+url_for(Controller, Action, Params) ->
+    Params2 = lists:map(
+        fun
+            (Param) when is_integer(Param)-> integer_to_list(Param);
+            (Param) when is_float(Param)  -> float_to_list(Param);
+            (Param)                       -> yaws_api:url_encode(Param)  % string()
+        end,
+        Params
+    ),
+    ale_routes:url_for(Controller, Action, Params2).
