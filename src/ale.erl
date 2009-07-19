@@ -59,5 +59,9 @@ flash()      -> ale_session:flash().
 %-------------------------------------------------------------------------------
 
 ff(Basename, Data)    -> ale_utils:ff(Basename, Data).
+
 md5_hex(Module, Data) -> ale_utils:md5_hex(Module, Data).
-gravatar(Email, Size) -> ale_utils:gravatar(Email, Size).
+
+gravatar(Email)            -> ale_utils:gravatar(Email).
+gravatar(Email, Size)      -> ale_utils:gravatar(Email, Size).
+gravatar(Email, Size, Url) -> ale_utils:gravatar(Email, Size, Url).

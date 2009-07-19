@@ -4,6 +4,8 @@
 
 -include("ale.hrl").
 
+-define(DEFAULT_GRAVATAR_SIZE, 80).
+
 %% Scans the project directory to find the first file with Basename, then reads
 %% the file and apply io_lib:format/2. This function can be used to render
 %% JavaScript template file.
@@ -43,10 +45,16 @@ md5_hex(Module, Data) ->
     Md5 = Module:md5(Data),
     lists:flatten([io_lib:format("~2.16.0b", [N]) || N <- binary_to_list(Md5)]).
 
+gravatar(Email) ->
+    gravatar(Email, ?DEFAULT_GRAVATAR_SIZE).
+
 gravatar(Email, Size) ->
+    gravatar(Email, Size, "http://gravatar.com").
+
+gravatar(Email, Size, Url) ->
     GravatarId = case Email of
         undefined -> "";
         _         -> md5_hex(erlang, Email)
     end,
     Src = io_lib:format("http://www.gravatar.com/avatar.php?size=~p&gravatar_id=~s", [Size, GravatarId]),
-    {a, [{href, "http://gravatar.com"}], {img, [{src, Src}]}}.
+    {a, [{href, Url}], {img, [{src, Src}]}}.
