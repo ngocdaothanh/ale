@@ -26,7 +26,7 @@ app_add_script(Script) -> ale_pd:app_add_script(Script).
 
 arg()       -> ale_pd:arg().
 method()    -> ale_pd:method().
-uri()       -> ale_pd:uri().
+path()      -> ale_pd:path().
 params(Key) -> ale_pd:params(Key).
 
 layout_module(Module)    -> ale_pd:layout_module(Module).
@@ -36,10 +36,10 @@ view_module(Module)      -> ale_pd:view_module(Module).
 
 %-------------------------------------------------------------------------------
 
-url_for(Controller, Action, Params)          -> ale_routes_gen:url_for(Controller, Action, Params).
-url_for(Action, Params) when is_list(Params) -> ale_routes_gen:url_for(Action, Params);
-url_for(Controller, Action)                  -> ale_routes_gen:url_for(Controller, Action).
-url_for(Action)                              -> ale_routes_gen:url_for(Action).
+path(Controller, Action, Params)          -> ale_routes_gen:path(Controller, Action, Params).
+path(Action, Params) when is_list(Params) -> ale_routes_gen:path(Action, Params);
+path(Controller, Action)                  -> ale_routes_gen:path(Controller, Action).
+path(Action)                              -> ale_routes_gen:path(Action).
 
 %-------------------------------------------------------------------------------
 

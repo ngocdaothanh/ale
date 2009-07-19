@@ -23,9 +23,9 @@ lib directory.
 There's no "generate" script. To create a new project, simply copy "skel"
 directory to some place and modify.
 
-== Routes and url_for
+== Routes and path
 
-A route maps method and URI to controller and action. Routes are defined in
+A route maps method and path to controller and action. Routes are defined in
 controllers as a module attribute.
 
 -module(c_articles).
@@ -43,14 +43,12 @@ controllers as a module attribute.
 index() -> ...
 show()  -> Id = list_to_integer(ale:params(id))...
 
-Fixed parts are in lower case, variable parts are captitalized. Function names
-can be used in filters.
+Function names can be used in before action filters.
 
-Use url_for to generate URL (io list) back from controller, action, and
-variables:
+Use path to generate path (io list) back from controller, action, and params:
 
-ale:url_for(articles, index)      % => ["/", "articles"]
-ale:url_for(articles, show, [1])  % => ["/", "articles", "/", "1"]
+ale:path(articles, index)      % => ["/", "articles"]
+ale:path(articles, show, [1])  % => ["/", "articles", "/", "1"]
 
 == c_application
 

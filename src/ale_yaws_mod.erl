@@ -26,20 +26,20 @@ start(SC) ->
 % FIXME: currently cache only works if there is a view to render
 
 out(Arg) ->
-    Uri = Arg#arg.server_path,  % Ale only supports mounting to /
+    Path = Arg#arg.server_path,  % Ale only supports mounting to /
 
-    case Uri of
+    case Path of
         % Give Yaws a chance to server static file from "/static"
         % See http://groups.google.com/group/nitrogenweb/browse_thread/thread/c2ce70f696b77c9e
-        % If Yaws cannot find a file at the Uri, out404 below will be called
+        % If Yaws cannot find a file at the Path, out404 below will be called
         %
         % NOTE: Yaws 1.84 crashes if we put({yaws, page}, Arg#arg.server_path)
         % and return page
-        "/static" ++ _ -> {page, Uri};
+        "/static" ++ _ -> {page, Path};
 
         _ ->
             Method = rest_method(Arg),
-            case ale_routes:route_uri(Method, Uri) of
+            case ale_routes:route_path(Method, Path) of
                 no_route ->
                     c_application:error_404(),
                     case ale_pd:view_module() of
@@ -53,7 +53,7 @@ out(Arg) ->
                             fun({Key, Value}) -> {Key, yaws_api:url_decode(Value)} end,
                             Params
                         ),
-                        handle_request1(Arg, Method, Uri, ControllerModule, Action, Params2)
+                        handle_request1(Arg, Method, Path, ControllerModule, Action, Params2)
                     catch
                         Type : Reason ->
                             error_logger:error_report([
@@ -136,27 +136,27 @@ rest_method(Arg) ->
             end
     end.
 
-handle_request1(Arg, Method, Uri, ControllerModule, Action, Params) ->
+handle_request1(Arg, Method, Path, ControllerModule, Action, Params) ->
     case ale_is_cached:is_cached(ControllerModule, page, Action) of
         true ->
-            Html = ale_cache:cache(Uri, fun() ->
-                handle_request2(Arg, Method, Uri, ControllerModule, Action, Params)
+            Html = ale_cache:cache(Path, fun() ->
+                handle_request2(Arg, Method, Path, ControllerModule, Action, Params)
             end),
             ale_pd:yaws(html, Html);
 
-        false -> handle_request2(Arg, Method, Uri, ControllerModule, Action, Params)
+        false -> handle_request2(Arg, Method, Path, ControllerModule, Action, Params)
     end.
 
 %% Returns:
 %% * HTML (converted to binary) if a view has been rendered (with or without layout)
 %% * undefined if there was no view or the request has been halted by a before action filter
-handle_request2(Arg, Method, Uri, ControllerModule, Action, Params) ->
+handle_request2(Arg, Method, Path, ControllerModule, Action, Params) ->
     % Set environment variables to the process dictionary here (not in
     % handle_request1 because they are not used there) because the application
     % may need these variables
     ale_pd:arg(Arg),
     ale_pd:method(Method),
-    ale_pd:uri(Uri),
+    ale_pd:path(Path),
 
     % Keys of params are always string to avoid list_to_atom attack
     % For convenience, application developer may use ale:params(Atom)
@@ -191,17 +191,17 @@ handle_request2(Arg, Method, Uri, ControllerModule, Action, Params) ->
         false ->
             case ale_is_cached:is_cached(ControllerModule, action_with_layout, Action) of
                 true ->
-                    Html = ale_cache:cache(Uri, fun() ->
-                        handle_request3(Uri, ControllerModule, Action)
+                    Html = ale_cache:cache(Path, fun() ->
+                        handle_request3(Path, ControllerModule, Action)
                     end),
                     ale_pd:yaws(html, Html);    % Can't be page cached because action cached
 
-                false -> handle_request3(Uri, ControllerModule, Action)
+                false -> handle_request3(Path, ControllerModule, Action)
             end
     end.
 
 %% Returns HTML if there is a view to render, undefined otherwise.
-handle_request3(Uri, ControllerModule, Action) ->
+handle_request3(Path, ControllerModule, Action) ->
     ActionCachedWithoutLayout = ale_is_cached:is_cached(ControllerModule, action_without_layout, Action),
     {ContentForLayout, FromCache} = case ActionCachedWithoutLayout of
         true ->
@@ -209,7 +209,7 @@ handle_request3(Uri, ControllerModule, Action) ->
             % * If list, it is:
             % [{content_for_layout, Binary} | Variables to be put to process dictionary for layout to use]
             % * If binary, it is content_for_layout
-            case ale_cache:cache(Uri) of
+            case ale_cache:cache(Path) of
                 not_found -> {handle_request4(ControllerModule, Action), false};
 
                 {ok, BinaryOrList} ->
@@ -247,7 +247,7 @@ handle_request3(Uri, ControllerModule, Action) ->
                         true ->
                             case FromCache of
                                 true  -> ok;
-                                false -> ale_cache:cache(Uri, fun() -> ContentForLayout end)
+                                false -> ale_cache:cache(Path, fun() -> ContentForLayout end)
                             end
                     end,
                     ContentForLayout;
@@ -281,7 +281,7 @@ handle_request3(Uri, ControllerModule, Action) ->
                                         0 -> ContentForLayout;
                                         _ -> [{content_for_layout, ContentForLayout} | VFL]
                                     end,
-                                    ale_cache:cache(Uri, fun() -> ThingToCache end, w),
+                                    ale_cache:cache(Path, fun() -> ThingToCache end, w),
 
                                     Ehtml2
                             end

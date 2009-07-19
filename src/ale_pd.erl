@@ -146,8 +146,8 @@ arg()    -> ale(arg).
 method(Method) -> ale(method, Method).
 method()       -> ale(method).
 
-uri(Uri) -> ale(uri, Uri).
-uri()    -> ale(uri).
+path(Path) -> ale(path, Path).
+path()    -> ale(path).
 
 %% Key: string().
 params(Key, Value) -> erlang:put(?KEY(params, Key), Value).
