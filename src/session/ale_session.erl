@@ -53,11 +53,15 @@ session_id_value(Value) ->
     ale_pd:yaws(header, {set_cookie, io_lib:format("~s=~s;", [SessionIdKey, Value2])}),
     ale_pd:ale(session_id_value, Value2).
 
-%% Generates new session ID value.
+%% Generates new session ID value, which should be unique.
 random_session_id_value() ->
-    % From yaws_sessions_server.erl
-    N = random:uniform(16#ffffffffffffffff),  % 64 bits
-    atom_to_list(node()) ++ [$- | integer_to_list(N)].
+    % node() should not be used because if the nodes are not connected, they may
+    % have an identical name
+    Random = random:uniform(16#ffffffffffffffff),  % 64 bits
+    Now    = now(),
+    Arg    = ale_pd:arg(),
+    Salt   = proplists:get_value("session_secret", Arg#arg.opaque),
+    ale_utils:md5_hex(erlang, term_to_binary({Random, Now, Salt})).
 
 %-------------------------------------------------------------------------------
 

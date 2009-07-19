@@ -2,6 +2,39 @@
 
 -compile(export_all).
 
+-include("ale.hrl").
+
+%% Scans the project directory to find the first file with Basename, then reads
+%% the file and apply io_lib:format/2. This function can be used to render
+%% JavaScript template file.
+ff(Basename, Data) ->
+    Format = ale_cache:cache("ale_utils:ff/" ++ Basename, fun() ->
+        case find_file(Basename, [?ALE_ROOT]) of
+            undefined ->
+                Reason = io_lib:format("File not found: ~s", Basename),
+                erlang:error(Reason);
+
+            File ->
+                {ok, Binary} = file:read_file(File),
+                Binary
+        end
+    end),
+    io_lib:format(Format, Data).
+
+%% Returns undefined if not found or the full file path.
+find_file(_Basename, []) -> undefined;
+find_file(Basename, [Dir | Rest]) ->
+    Path = filename:join([Dir, Basename]),
+    case filelib:is_regular(Path) of
+        true -> Path;
+
+        false ->
+            Dirs = [D || D <- filelib:wildcard(Dir ++ "/*"), filelib:is_dir(D)],
+            find_file(Basename, Dirs ++ Rest)
+    end.
+
+%-------------------------------------------------------------------------------
+
 %% Module: erlang or crypto
 %%
 %% erlang is faster for short Data:

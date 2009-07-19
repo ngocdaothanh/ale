@@ -53,5 +53,6 @@ clear_session()     -> ale_session:clear_session().
 
 %-------------------------------------------------------------------------------
 
+ff(Basename, Data)    -> ale_utils:ff(Basename, Data).
 md5_hex(Module, Data) -> ale_utils:md5_hex(Module, Data).
 gravatar(Email, Size) -> ale_utils:gravatar(Email, Size).
