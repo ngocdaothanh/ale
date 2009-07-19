@@ -12,20 +12,23 @@
 % * app:  used by the application
 % * ale:  used by Ale framework
 
-yaws(Key, Value)                  -> erlang:put(?KEY(yaws, Key), Value).
+%% If Key is header, Value will be accumulated to avoid overwriting the existings.
+yaws(Key, Value) ->
+    case Key of
+        header ->
+            case erlang:get(?KEY(yaws, headers)) of
+                undefined -> erlang:put(?KEY(yaws, headers), [{header, Value}]);
+                Headers   -> erlang:put(?KEY(yaws, headers), Headers ++ [{header, Value}])
+            end;
+
+        _ -> erlang:put(?KEY(yaws, Key), Value)
+    end.
+
 yaws(Key, Value1, Value2)         -> erlang:put(?KEY(yaws, Key), {Value1, Value2}).
 yaws(Key, Value1, Value2, Value3) -> erlang:put(?KEY(yaws, Key), {Value1, Value2, Value3}).
 yaws(Key)                         -> erlang:get(?KEY(yaws, Key)).
 
 app(Key, Value) -> erlang:put(?KEY(app, Key), Value).
-
-%% This function is special. It accumulates JavaScripts.
-app_add_script(Script) ->
-    % Avoid calling app(Key) because of the special cache handling
-    case erlang:get(?KEY(app, script)) of
-        undefined -> app(script, Script);
-        IoList    -> app(script, [IoList, Script])
-    end.
 
 %% Key script is special. For this key this function returns
 %% {script, [{type, "text/javascript"}], accumulated scripts}.
@@ -33,9 +36,16 @@ app_add_script(Script) ->
 app(Key) ->
     Value1 = erlang:get(?KEY(app, Key)),
 
-    % script is special
     Value2 = case Key of
-        script ->
+        % See app_add_head/1
+        heads ->
+            case Value1 of
+                undefined -> "";
+                IoList    -> IoList
+            end;
+
+        % See app_add_script/1
+        scripts ->
             case Value1 of
                 undefined -> "";
                 IoList    -> {script, [{type, "text/javascript"}], IoList}
@@ -66,6 +76,22 @@ app(Key) ->
     end,
     Value2.
 
+%% Accumulates <head>. The heads will be dumped right before </body> in layout.
+app_add_head(Head) ->
+    % Avoid calling app(heads) because of the special cache handling right above
+    case erlang:get(?KEY(app, heads)) of
+        undefined -> app(heads, Head);
+        IoList    -> app(heads, [IoList, Head])
+    end.
+
+%% Accumulates <script>. The scripts will be dumped right before </body> in layout.
+app_add_script(Script) ->
+    % Avoid calling app(scripts) because of the special cache handling right above
+    case erlang:get(?KEY(app, scripts)) of
+        undefined -> app(scripts, Script);
+        IoList    -> app(scripts, [IoList, Script])
+    end.
+
 ale(Key, Value) -> erlang:put(?KEY(ale, Key), Value).
 ale(Key)        -> erlang:get(?KEY(ale, Key)).
 
@@ -82,14 +108,16 @@ get(Type) ->
             ({{Type2, Key}, {Value1, Value2, Value3}}, Acc) when Type2 == Type ->
                 [{Key, Value1, Value2, Value3} | Acc];
 
-            ({{Type2, Key}, {Value1, Value2        }}, Acc) when Type2 == Type ->
-                [{Key, Value1, Value2        } | Acc];
+            ({{Type2, Key}, {Value1, Value2}}, Acc) when Type2 == Type ->
+                [{Key, Value1, Value2} | Acc];
 
-            ({{Type2, Key},  Value                  }, Acc) when Type2 == Type ->
-                [{Key, Value}                  | Acc];
+            ({{Type2, Key},  Value}, Acc) when Type2 == Type ->
+                case (Type == yaws) andalso (Key == headers) of
+                    true  -> [Value | Acc];
+                    false -> [{Key, Value} | Acc]
+                end;
 
-            (_                                       , Acc)                    ->
-                                                 Acc
+            (_, Acc) -> Acc
         end,
         [],
         erlang:get()
@@ -104,7 +132,7 @@ keys(Type) ->
             ({{Type2, Key}, {_Value1, _Value2, _Value3}}, Acc) when Type2 == Type -> [Key | Acc];
             ({{Type2, Key}, {_Value1, _Value2         }}, Acc) when Type2 == Type -> [Key | Acc];
             ({{Type2, Key},  _Value                    }, Acc) when Type2 == Type -> [Key | Acc];
-            (_                                         , Acc)                     ->        Acc
+            (_                                          , Acc)                    ->        Acc
         end,
         [],
         erlang:get()
@@ -140,7 +168,7 @@ layout_module()       -> ale(layout_module).
 
 view(Action) ->
     case Action of
-        undefined -> erlang:erase(?KEY(ale, view_module));
+        undefined -> view_module(undefined);
 
         _ ->
             Controller = ale_pd:params(controller),
@@ -152,6 +180,9 @@ view(Controller, Action) ->
     ale_pd:ale(view_module, ViewModule).
 
 view_module(Module) ->
-    ale_pd:ale(view_module, Module).
+    case Module of
+        undefined -> erlang:erase(?KEY(ale, view_module));
+        _         -> ale_pd:ale(view_module, Module)
+    end.
 
 view_module() -> ale(view_module).

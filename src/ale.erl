@@ -18,8 +18,9 @@ yaws(Key)                         -> ale_pd:yaws(Key).
 %-------------------------------------------------------------------------------
 
 app(Key, Value)        -> ale_pd:app(Key, Value).
-app_add_script(Script) -> ale_pd:app_add_script(Script).
 app(Key)               -> ale_pd:app(Key).
+app_add_head(Head)     -> ale_pd:app_add_head(Head).
+app_add_script(Script) -> ale_pd:app_add_script(Script).
 
 %-------------------------------------------------------------------------------
 
@@ -46,9 +47,11 @@ cache(Key, Fun, Options) -> ale_cache:cache(Key, Fun, Options).
 
 %-------------------------------------------------------------------------------
 
-user() -> ale_session:user().
+session(Key, Value) -> ale_session:session(Key, Value).
+session(Key)        -> ale_session:session(Key).
+clear_session()     -> ale_session:clear_session().
 
 %-------------------------------------------------------------------------------
 
-md5_hex(Data) -> ale_utils:md5_hex(Data).
+md5_hex(Module, Data) -> ale_utils:md5_hex(Module, Data).
 gravatar(Email, Size) -> ale_utils:gravatar(Email, Size).

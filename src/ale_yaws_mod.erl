@@ -147,7 +147,9 @@ handle_request1(Arg, Method, Uri, ControllerModule, Action, Params) ->
         false -> handle_request2(Arg, Method, Uri, ControllerModule, Action, Params)
     end.
 
-%% Returns HTML if the request is not halted by a before filter or action cached.
+%% Returns:
+%% * HTML (converted to binary) if a view has been rendered (with or without layout)
+%% * undefined if there was no view or the request has been halted by a before action filter
 handle_request2(Arg, Method, Uri, ControllerModule, Action, Params) ->
     % Set environment variables to the process dictionary here (not in
     % handle_request1 because they are not used there) because the application
@@ -183,8 +185,8 @@ handle_request2(Arg, Method, Uri, ControllerModule, Action, Params) ->
     ale_pd:params("controller", Controller),
     ale_pd:params("action", Action),
 
-    case run_before_filters(ControllerModule, Action) of
-        true -> ignore;    % Can't be page cached because halted by a before filter
+    case run_before_action(ControllerModule, Action) of
+        true -> undefined;  % Can't be page cached because halted by a before action filter
 
         false ->
             case ale_is_cached:is_cached(ControllerModule, action_with_layout, Action) of
@@ -198,7 +200,7 @@ handle_request2(Arg, Method, Uri, ControllerModule, Action, Params) ->
             end
     end.
 
-%% Returns HTML if there is a view to render.
+%% Returns HTML if there is a view to render, undefined otherwise.
 handle_request3(Uri, ControllerModule, Action) ->
     ActionCachedWithoutLayout = ale_is_cached:is_cached(ControllerModule, action_without_layout, Action),
     {ContentForLayout, FromCache} = case ActionCachedWithoutLayout of
@@ -229,70 +231,73 @@ handle_request3(Uri, ControllerModule, Action) ->
                     end
             end;
 
-        false ->
-            % Binary
-            {handle_request4(ControllerModule, Action), undefined}
+        false -> {handle_request4(ControllerModule, Action), undefined}
     end,
 
-    Html = case ale_pd:layout_module() of
-        undefined ->
-            case ActionCachedWithoutLayout of
-                false -> ok;
+    case ContentForLayout of
+        undefined -> undefined;
 
-                % Cache ContentForLayout if is was not from cache
-                true ->
-                    case FromCache of
-                        true  -> ok;
-                        false -> ale_cache:cache(Uri, fun() -> ContentForLayout end)
-                    end
-            end,
-            ContentForLayout;
+        _ ->  % Binary
+            Html = case ale_pd:layout_module() of
+                undefined ->
+                    case ActionCachedWithoutLayout of
+                        false -> ok;
 
-        LayoutModule ->
-            ale_pd:app(content_for_layout, ContentForLayout),
-
-            % See above and ale_pd:app/1
-            Ehtml = case ActionCachedWithoutLayout of
-                false -> LayoutModule:render();
-
-                true ->
-                    % Cache ContentForLayout if is was not from cache
-                    case FromCache of
+                        % Cache ContentForLayout if is was not from cache
                         true ->
-                            % Things have been put into the process dictionary above
-                            % we just need to render the layout
-                            LayoutModule:render();
+                            case FromCache of
+                                true  -> ok;
+                                false -> ale_cache:cache(Uri, fun() -> ContentForLayout end)
+                            end
+                    end,
+                    ContentForLayout;
 
-                        false ->
-                            % Variables for layout will be accumulated in ale_pd:app/2
-                            ale_pd:ale(variables_for_layout, []),
-                            Ehtml2 = LayoutModule:render(),
+                LayoutModule ->
+                    ale_pd:app(content_for_layout, ContentForLayout),
 
-                            % If the layout did not use any variable from the action or
-                            % its view, we only need to cache the content. Otherwise
-                            % we need to cache both the content and variables.
-                            VFL = ale_pd:ale(variables_for_layout),
+                    % See above and ale_pd:app/1
+                    Ehtml = case ActionCachedWithoutLayout of
+                        false -> run_layout(LayoutModule);
 
-                            ThingToCache = case length(VFL) of
-                                0 -> ContentForLayout;
-                                _ -> [{content_for_layout, ContentForLayout} | VFL]
-                            end,
-                            ale_cache:cache(Uri, fun() -> ThingToCache end, w),
+                        true ->
+                            % Cache ContentForLayout if is was not from cache
+                            case FromCache of
+                                true ->
+                                    % Things have been put into the process dictionary above
+                                    % we just need to render the layout
+                                    run_layout(LayoutModule);
 
-                            Ehtml2
-                    end
+                                false ->
+                                    % Variables for layout will be accumulated in ale_pd:app/2
+                                    ale_pd:ale(variables_for_layout, []),
+                                    Ehtml2 = run_layout(LayoutModule),
+
+                                    % If the layout did not use any variable from the action or
+                                    % its view, we only need to cache the content. Otherwise
+                                    % we need to cache both the content and variables.
+                                    VFL = ale_pd:ale(variables_for_layout),
+
+                                    ThingToCache = case length(VFL) of
+                                        0 -> ContentForLayout;
+                                        _ -> [{content_for_layout, ContentForLayout} | VFL]
+                                    end,
+                                    ale_cache:cache(Uri, fun() -> ThingToCache end, w),
+
+                                    Ehtml2
+                            end
+                    end,
+
+                    % Because the result may be cached, we convert EHTML to HTML (io list)
+                    % binary for efficiency
+                    Html2 = yaws_api:ehtml_expand(Ehtml),
+                    list_to_binary(Html2)
             end,
 
-            % Because the result may be cached, we convert EHTML to HTML (io list)
-            % binary for efficiency
-            Html2 = yaws_api:ehtml_expand(Ehtml),
-            list_to_binary(Html2)
-    end,
+            ale_pd:yaws(html, Html),
+            Html
+    end.
 
-    ale_pd:yaws(html, Html),
-    Html.
-
-%% Returns HTML if there is a view to render.
+%% Returns HTML if there is a view to render, undefined otherwise.
 handle_request4(ControllerModule, Action) ->
     % Set default view before calling action, the action may change
     ale_pd:view(Action),
@@ -301,18 +306,15 @@ handle_request4(ControllerModule, Action) ->
 
     % If the action is cached without layout, then variables introduced by this
     % action are remembered so that ale_pd:app/1 can cache them
-    case ActionCachedWithoutLayout of
-        false ->
-            Keys1 = [],  % Just for suppressing compile time warning
-            ControllerModule:Action();
-
-        true ->
-            Keys1 = ale_pd:keys(app),
-            ControllerModule:Action()
+    Keys1 = case ActionCachedWithoutLayout of
+        false -> [];  % Just for suppressing compile time warning
+        true  -> ale_pd:keys(app)
     end,
 
+    ControllerModule:Action(),
+
     case ale_pd:view_module() of
-        undefined -> ok;    % Layout is not called if there is no view
+        undefined -> undefined;  % Layout is not called if there is no view
 
         ViewModule ->
             Ehtml = ViewModule:render(),
@@ -331,18 +333,23 @@ handle_request4(ControllerModule, Action) ->
             list_to_binary(Html)
     end.
 
+%-------------------------------------------------------------------------------
+
 %% Returns true if the action should be halted.
-run_before_filters(ControllerModule, Action) ->
-    case erlang:function_exported(c_application, before_filter, 2) andalso
-        c_application:before_filter(ControllerModule, Action) of
+run_before_action(ControllerModule, Action) ->
+    case erlang:function_exported(c_application, before_action, 2) andalso
+        c_application:before_action(ControllerModule, Action) of
         true -> true;
 
         false ->
-            erlang:function_exported(ControllerModule, before_filter, 1) andalso
-                ControllerModule:before_filter(Action)
+            erlang:function_exported(ControllerModule, before_action, 1) andalso
+                ControllerModule:before_action(Action)
     end.
 
-%-------------------------------------------------------------------------------
+% FIXME
+run_layout(LayoutModule) ->
+    h_facebook:before_layout(),
+    LayoutModule:render().
 
 %% Converts c_hello to hello.
 cm2c(ControllerModule) ->
