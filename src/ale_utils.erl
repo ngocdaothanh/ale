@@ -49,4 +49,4 @@ gravatar(Email, Size) ->
         _         -> md5_hex(erlang, Email)
     end,
     Src = io_lib:format("http://www.gravatar.com/avatar.php?size=~p&gravatar_id=~s", [Size, GravatarId]),
-    {img, [{src, Src}]}.
+    {a, [{href, "http://gravatar.com"}], {img, [{src, Src}]}}.
