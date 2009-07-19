@@ -36,8 +36,10 @@ view_module(Module)      -> ale_pd:view_module(Module).
 
 %-------------------------------------------------------------------------------
 
-url_for(Controller, Action)         -> ale_routes_gen:url_for(Controller, Action).
-url_for(Controller, Action, Params) -> ale_routes_gen:url_for(Controller, Action, Params).
+url_for(Controller, Action, Params)          -> ale_routes_gen:url_for(Controller, Action, Params).
+url_for(Action, Params) when is_list(Params) -> ale_routes_gen:url_for(Action, Params);
+url_for(Controller, Action)                  -> ale_routes_gen:url_for(Controller, Action).
+url_for(Action)                              -> ale_routes_gen:url_for(Action).
 
 %-------------------------------------------------------------------------------
 
@@ -50,6 +52,9 @@ cache(Key, Fun, Options) -> ale_cache:cache(Key, Fun, Options).
 session(Key, Value) -> ale_session:session(Key, Value).
 session(Key)        -> ale_session:session(Key).
 clear_session()     -> ale_session:clear_session().
+
+flash(Value) -> ale_session:flash(Value).
+flash()      -> ale_session:flash().
 
 %-------------------------------------------------------------------------------
 

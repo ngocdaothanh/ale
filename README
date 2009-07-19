@@ -1,4 +1,4 @@
-Ale is a thin layer above Yaws to make web development with Yaws easier.
+Ale is a web framework for Yaws to make web development with Yaws easier.
 
 It provides:
 * Sinatra-like routes (http://github.com/sinatra/sinatra)

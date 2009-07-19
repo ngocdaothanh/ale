@@ -205,8 +205,6 @@ snake_to_camel2([H | Rest]) ->
 
 %-------------------------------------------------------------------------------
 
-url_for(Controller, Action) -> ale_routes:url_for(Controller, Action, []).
-
 %% Params is not a proplists, just a list of params in the same order as in routes.
 %% If the a param is an integer or a float, It will be converted to string so that
 %% because the return value is an io list of strings.
@@ -220,3 +218,13 @@ url_for(Controller, Action, Params) ->
         Params
     ),
     ale_routes:url_for(Controller, Action, Params2).
+
+url_for(Action, Params) when is_list(Params) ->
+    Controller = ale_pd:params(controller),
+    url_for(Controller, Action, Params);
+url_for(Controller, Action) ->
+    url_for(Controller, Action, []).
+
+url_for(Action) ->
+    Controller = ale_pd:params(controller),
+    url_for(Controller, Action, []).

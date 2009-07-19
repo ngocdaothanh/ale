@@ -7,6 +7,8 @@
 
 -include("ale.hrl").
 
+-define(FLASH_KEY, ale_session_flash).
+
 %-------------------------------------------------------------------------------
 
 session(Key, Value) ->
@@ -20,6 +22,13 @@ session(Key) ->
 clear_session() ->
     Module = session_module(),
     Module:clear_session().
+
+flash(Value) -> session(?FLASH_KEY, Value).
+
+flash() ->
+    Flash = session(?FLASH_KEY),
+    session(?FLASH_KEY, undefined),
+    Flash.
 
 %-------------------------------------------------------------------------------
 % For use by session implementation modules.
