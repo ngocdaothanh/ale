@@ -31,7 +31,7 @@ gen() ->
         "\nroute_tokens(_, _) -> no_route.\n",
 
         path_gen(Forms),
-        "\npath(_, _, _) -> erlang:error(no_url).\n"
+        "\npath(Controller, Action, Params) -> erlang:error({no_path, [Controller, Action, Params]}).\n"
     ],
     file:write_file("ale_routes.erl", Source).
 
