@@ -27,6 +27,7 @@ app_add_script(Script) -> ale_pd:app_add_script(Script).
 arg()       -> ale_pd:arg().
 method()    -> ale_pd:method().
 path()      -> ale_pd:path().
+ip()        -> ale_pd:ip().
 params(Key) -> ale_pd:params(Key).
 
 layout_module(Module)    -> ale_pd:layout_module(Module).

@@ -4,6 +4,8 @@
 
 -compile(export_all).
 
+-include("ale.hrl").
+
 -define(KEY(Namespace, Key), {Namespace, Key}).
 
 %-------------------------------------------------------------------------------
@@ -147,7 +149,17 @@ method(Method) -> ale(method, Method).
 method()       -> ale(method).
 
 path(Path) -> ale(path, Path).
-path()    -> ale(path).
+path()     -> ale(path).
+
+ip() ->
+    Arg = arg(),
+    Sock = Arg#arg.clisock,
+    Peer = case is_tuple(Sock) andalso (element(1, Sock) == sslsocket) of
+        true -> ssl:peername(Sock);
+        _    -> inet:peername(Sock)
+    end, 
+    {ok, {Ip, _Port}} = Peer,
+    Ip.
 
 %% Key: string().
 params(Key, Value) -> erlang:put(?KEY(params, Key), Value).
