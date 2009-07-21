@@ -158,21 +158,17 @@ handle_request2(Arg, Method, Path, ControllerModule, Action, Params) ->
     ale_pd:method(Method),
     ale_pd:path(Path),
 
-    % Keys of params are always string to avoid list_to_atom attack
-    % For convenience, application developer may use ale:params(Atom)
+    % Keys of params are always string to avoid list_to_atom attack, however
+    % for convenience, application developer may use ale:params(Atom)
 
-    % Put 'POST' params first
-    % Ale does not support 'GET' params because they makes the URI ugly (?foo=bar etc.)
-    case not (Method == get) of
-        true ->
-            PostParams = yaws_api:parse_post(Arg),
-            lists:foreach(
-                fun({Key, Value}) -> ale_pd:params(Key, Value) end,
-                PostParams
-            );
-
-        false -> ok
+    ExtraParams = case Method of
+        get -> yaws_api:parse_query(Arg);
+        _   -> yaws_api:parse_post(Arg)
     end,
+    lists:foreach(
+        fun({Key, Value}) -> ale_pd:params(Key, Value) end,
+        ExtraParams
+    ),
 
     % Put params on URI later
     lists:foreach(

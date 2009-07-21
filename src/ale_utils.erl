@@ -6,6 +6,8 @@
 
 -define(DEFAULT_GRAVATAR_SIZE, 80).
 
+ff(Basename) -> ff(Basename, []).
+
 %% Scans the project directory to find the first file with Basename, then reads
 %% the file and apply io_lib:format/2. This function can be used to render
 %% JavaScript template file.

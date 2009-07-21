@@ -58,6 +58,7 @@ flash()      -> ale_session:flash().
 
 %-------------------------------------------------------------------------------
 
+ff(Basename)          -> ale_utils:ff(Basename).
 ff(Basename, Data)    -> ale_utils:ff(Basename, Data).
 
 md5_hex(Module, Data) -> ale_utils:md5_hex(Module, Data).
