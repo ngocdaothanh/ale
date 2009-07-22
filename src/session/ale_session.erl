@@ -55,11 +55,11 @@ session_id_value() ->
 session_id_value(Value) ->
     Value2 = case Value of
         undefined -> random_session_id_value();
-
-        _ -> Value
+        _         -> Value
     end,
     SessionIdKey = session_id_key(),
-    ale_pd:yaws(header, {set_cookie, io_lib:format("~s=~s;", [SessionIdKey, Value2])}),
+    {header, SetCookieRec} = yaws_api:setcookie(SessionIdKey, Value2, "/"),
+    ale_pd:yaws(header, SetCookieRec),
     ale_pd:ale(session_id_value, Value2).
 
 %% Generates new session ID value, which should be unique.
