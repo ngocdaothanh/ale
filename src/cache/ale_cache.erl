@@ -47,8 +47,10 @@ start_link(SC, _Nodes) ->
 
 %% Returns {ok, Value} or not_found.
 cache(Key) ->
-    Module = cache_module(),
-    Module:r(Key).
+    case cache_module() of
+        undefined -> not_found;
+        Module    -> Module:r(Key)
+    end.
 
 cache(Key, Fun) -> cache(Key, Fun, []).
 
@@ -73,13 +75,16 @@ cache(Key, Fun, Options) ->
         true  -> Options
     end,
 
-    ROrW = case proplists:get_value(w, Options2) of
-        true -> w;
-        _    -> r
-    end,
+    case cache_module() of
+        undefined -> value(Fun, Options2);
 
-    Module = cache_module(),
-    Module:ROrW(Key, Fun, Options2).
+        Module ->
+            ROrW = case proplists:get_value(w, Options2) of
+                true -> w;
+                _    -> r
+            end,
+            Module:ROrW(Key, Fun, Options2)
+    end.
 
 %-------------------------------------------------------------------------------
 
@@ -110,4 +115,10 @@ value(Fun, Options) ->
 
 %% Returns the cache server module being used.
 cache_module() ->
-    ale_pd:conf(ale, cache_module).
+    case ale_pd:conf(ale, cache_module) of
+        undefined ->
+            log4erl:error("Cache Not Configured"),
+            undefined;
+
+        Module -> Module
+    end.
