@@ -10,6 +10,13 @@ sync() -> make:all([load]).
 
 %-------------------------------------------------------------------------------
 
+conf(SCOrNamespace, Key, Value) -> ale_pd:conf(SCOrNamespace, Key, Value).
+conf(Namespace, Key)            -> ale_pd:conf(Namespace, Key).
+conf(SC, Namespace, Key, Value) -> ale_pd:conf(SC, Namespace, Key, Value).
+
+
+%-------------------------------------------------------------------------------
+
 yaws(Key, Value)                  -> ale_pd:yaws(Key, Value).
 yaws(Key, Value1, Value2)         -> ale_pd:yaws(Key, Value1, Value2).
 yaws(Key, Value1, Value2, Value3) -> ale_pd:yaws(Key, Value1, Value2, Value3).
@@ -24,11 +31,16 @@ app_add_script(Script) -> ale_pd:app_add_script(Script).
 
 %-------------------------------------------------------------------------------
 
+gc()        -> ale_pd:gc().
+sc()        -> ale_pd:sc().
 arg()       -> ale_pd:arg().
+
 method()    -> ale_pd:method().
 path()      -> ale_pd:path().
-ip()        -> ale_pd:ip().
 params(Key) -> ale_pd:params(Key).
+
+schema_host_port(Path) -> ale_pd:schema_host_port(Path).
+ip()                   -> ale_pd:ip().
 
 layout_module(Module)    -> ale_pd:layout_module(Module).
 view(Action)             -> ale_pd:view(Action).
@@ -37,10 +49,9 @@ view_module(Module)      -> ale_pd:view_module(Module).
 
 %-------------------------------------------------------------------------------
 
-path(Controller, Action, Params)          -> ale_routes_gen:path(Controller, Action, Params).
-path(Action, Params) when is_list(Params) -> ale_routes_gen:path(Action, Params);
-path(Controller, Action)                  -> ale_routes_gen:path(Controller, Action).
-path(Action)                              -> ale_routes_gen:path(Action).
+path(Controller, Action, Params)         -> ale_routes_gen:path(Controller, Action, Params).
+path(ControllerOrAction, ActionOrParams) -> ale_routes_gen:path(ControllerOrAction, ActionOrParams).
+path(Action)                             -> ale_routes_gen:path(Action).
 
 %-------------------------------------------------------------------------------
 

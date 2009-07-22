@@ -1,4 +1,11 @@
-%% This module deals with setting and getting values from process dictionary.
+%% There is a process for each request.
+%%
+%% Yaws uses process dictionary. Some interesting things:
+%% * gc
+%% * sc
+%% * yaws_arg
+%%
+%% Ale also uses process dictionary.
 
 -module(ale_pd).
 
@@ -7,6 +14,29 @@
 -include("ale.hrl").
 
 -define(KEY(Namespace, Key), {Namespace, Key}).
+
+%-------------------------------------------------------------------------------
+% Each application is associated with an SC (http://yaws.hyber.org/embed.yaws).
+% We use SC's ets table to store consistent configurations throughout the
+% application lifetime.
+
+conf(SC, Namespace, Key) when is_record(SC, sconf) ->
+    T = SC#sconf.ets,
+    case ets:lookup(T, ?KEY(Namespace, Key)) of
+        [{_NamespacedKey, Value}] -> Value;
+        _                         -> undefined
+    end;
+conf(Namespace, Key, Value) ->
+    SC = sc(),
+    conf(SC, Namespace, Key, Value).
+
+conf(Namespace, Key) ->
+    SC = sc(),
+    conf(SC, Namespace, Key).
+
+conf(SC, Namespace, Key, Value) ->
+    T = SC#sconf.ets,
+    ets:insert(T, {?KEY(Namespace, Key), Value}).
 
 %-------------------------------------------------------------------------------
 % There are 3 namespaces:
@@ -142,8 +172,9 @@ keys(Type) ->
 
 %-------------------------------------------------------------------------------
 
-arg(Arg) -> ale(arg, Arg).
-arg()    -> ale(arg).
+gc()  -> erlang:get(gc).
+sc()  -> erlang:get(sc).
+arg() -> erlang:get(yaws_arg).
 
 method(Method) -> ale(method, Method).
 method()       -> ale(method).
@@ -151,6 +182,12 @@ method()       -> ale(method).
 path(Path) -> ale(path, Path).
 path()     -> ale(path).
 
+%% Makes absolute URL from Path. Host is as seen from the HTTP client.
+schema_host_port(Path) ->
+    SC = sc(),
+    "http://" ++ SC#sconf.servername ++ lists:flatten(Path).
+
+%% Returns remote IPv4 of the HTTP client in the form {a, b, c, d}.
 ip() ->
     Arg = arg(),
     Sock = Arg#arg.clisock,

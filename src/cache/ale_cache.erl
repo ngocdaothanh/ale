@@ -20,19 +20,22 @@
 
 -include("ale.hrl").
 
-start_link(SC, Nodes) ->
+start_link(SC, _Nodes) ->
     case proplists:get_value("cache", SC#sconf.opaque) of
         undefined -> ignore;
 
         Config ->
             case string:tokens(Config, ":") of
                 ["cherly", SizeInMB] ->
+                    ale_pd:conf(SC, ale, cache_module, ale_cache_cherly),
                     ale_cache_cherly:start_link(list_to_integer(SizeInMB));
 
                 ["memcached", Host, Port] ->
+                    ale_pd:conf(SC, ale, cache_module, ale_cache_memcached),
                     ale_cache_memcached:start_link(Host, list_to_integer(Port));
 
                 ["memcached_with_libketama", ServersFile] ->
+                    ale_pd:conf(SC, ale, cache_module, ale_cache_memcached_with_libketama),
                     ale_cache_memcached_with_libketama:start_link(ServersFile);
 
                 _ ->
@@ -107,14 +110,4 @@ value(Fun, Options) ->
 
 %% Returns the cache server module being used.
 cache_module() ->
-    % case whereis(ale_cache_etscached) of
-    %     undefined ->
-    %         case whereis(merle) of
-    %             undefined -> erlang:error("Cache server not running");
-    % 
-    %             _ -> ale_cache_memcached:cache(Key, Fun, Options)
-    %         end;
-    % 
-    %     _ -> ale_cache_etscached:cache(Key, Fun, Options)
-    % end.
-    ale_cache_cherly.
+    ale_pd:conf(ale, cache_module).

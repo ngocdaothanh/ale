@@ -5,8 +5,10 @@
 -include("ale.hrl").
 
 %% Modifies the current SC to set docroot and xtra_docroots to the list of all
-%% public directories in the application.
-set_docroot(SC) ->
+%% docroot directories in the application.
+%%
+%% Returns the modified SC.
+set_docroots(SC) ->
     {ok, GC, [SCs]} = yaws_api:getconf(),  % The 3rd element is array of array
 
     % docroot is undefined at this moment (see yaws.conf)

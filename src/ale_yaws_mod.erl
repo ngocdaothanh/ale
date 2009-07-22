@@ -13,7 +13,7 @@
 
 %% Called after Yaws has loaded.
 start(SC) ->
-    SC2 = ale_sc:set_docroot(SC),
+    SC2 = ale_sc:set_docroots(SC),
     start_children(SC2).
 
 % NOTE about caching:
@@ -154,7 +154,6 @@ handle_request2(Arg, Method, Path, ControllerModule, Action, Params) ->
     % Set environment variables to the process dictionary here (not in
     % handle_request1 because they are not used there) because the application
     % may need these variables
-    ale_pd:arg(Arg),
     ale_pd:method(Method),
     ale_pd:path(Path),
 
