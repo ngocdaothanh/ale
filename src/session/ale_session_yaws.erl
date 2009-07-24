@@ -15,12 +15,20 @@ session(Key, Value) ->
         SessionIdValue ->
             case yaws_api:cookieval_to_opaque(SessionIdValue) of
                 {ok, Session} ->
-                    Session2 = lists:keystore(Key, 1, Session, {Key, Value}),
+                    Session2 = case Value of
+                        undefined -> lists:keydelete(Key, 1, Session);
+                        _         -> lists:keystore(Key, 1, Session, {Key, Value})
+                    end,
                     yaws_api:replace_cookie_session(SessionIdValue, Session2);
 
                 _ ->
-                    SessionIdValue2 = yaws_api:new_cookie_session([{Key, Value}]),
-                    ale_session:session_id_value(SessionIdValue2)
+                    case Value of
+                        undefined -> ok;
+
+                        _ ->
+                            SessionIdValue2 = yaws_api:new_cookie_session([{Key, Value}]),
+                            ale_session:session_id_value(SessionIdValue2)
+                    end
             end
     end.
 
@@ -42,7 +50,7 @@ clear_session() ->
 
         SessionIdValue ->
             case yaws_api:cookieval_to_opaque(SessionIdValue) of
-                {ok, Session} -> yaws_api:replace_cookie_session(SessionIdValue, []);
-                _             -> ok
+                {ok, _Session} -> yaws_api:replace_cookie_session(SessionIdValue, []);
+                _              -> ok
             end
     end.

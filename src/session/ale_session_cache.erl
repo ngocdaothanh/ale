@@ -4,16 +4,25 @@
 
 session(Key, Value) ->
     SessionIdValue = case ale_session:session_id_value() of
-        undefined -> ale_session:session_id_value(undefined);
-        Value     -> Value
+        undefined       -> ale_session:session_id_value(undefined);
+        SessionIdValue2 -> SessionIdValue2
     end,
 
-    Session2 = case ale_cache:cache(SessionIdValue) of
-        undefined -> [{Key, Value}];
-        Session   -> lists:keystore(Key, 1, Session, {Key, Value})
+    Session = case ale_cache:cache(SessionIdValue) of
+        undefined ->
+            case Value of
+                undefined -> [];
+                _         -> [{Key, Value}]
+            end;
+
+        Session2 ->
+            case Value of
+                undefined -> lists:keydelete(Key, 1, Session2);
+                _         -> lists:keystore(Key, 1, Session2, {Key, Value})
+            end
     end,
 
-    ale_cache:cache(SessionIdValue, fun() -> Session2 end, w).
+    ale_cache:cache(SessionIdValue, fun() -> Session end, w).
 
 session(Key) ->
     case ale_session:session_id_value() of
