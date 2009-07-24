@@ -213,7 +213,11 @@ path(Controller, Action, Params) ->
         fun
             (Param) when is_integer(Param)-> integer_to_list(Param);
             (Param) when is_float(Param)  -> float_to_list(Param);
-            (Param)                       -> yaws_api:url_encode(Param)  % string()
+
+             % string()
+            (Param) ->
+                % yaws_api:url_encode only works with normal string, not IO list
+                yaws_api:url_encode(lists:flatten(Param))
         end,
         Params
     ),
