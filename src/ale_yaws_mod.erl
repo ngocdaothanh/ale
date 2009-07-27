@@ -180,6 +180,10 @@ handle_request2(Arg, Method, Path, ControllerModule, Action, Params) ->
     ale_pd:params("controller", Controller),
     ale_pd:params("action", Action),
 
+    % Set default view before calling filter and action, the filter or action
+    % may select another view
+    ale_pd:view(Action),
+
     case run_before_action(ControllerModule, Action) of
         true -> undefined;  % Can't be page cached because halted by a before action filter
 
@@ -294,9 +298,6 @@ handle_request3(Path, ControllerModule, Action) ->
 
 %% Returns HTML if there is a view to render, undefined otherwise.
 handle_request4(ControllerModule, Action) ->
-    % Set default view before calling action, the action may change
-    ale_pd:view(Action),
-
     ActionCachedWithoutLayout = ale_is_cached:is_cached(ControllerModule, action_without_layout, Action),
 
     % If the action is cached without layout, then variables introduced by this
