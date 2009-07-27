@@ -47,13 +47,13 @@ out(Arg) ->
                         ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
                     end;
 
-                {ControllerModule, Action, Params} ->
+                {CModule, Action, Params} ->
                     try
                         Params2 = lists:map(
                             fun({Key, Value}) -> {Key, yaws_api:url_decode(Value)} end,
                             Params
                         ),
-                        handle_request1(Arg, Method, Path, ControllerModule, Action, Params2)
+                        handle_request1(Arg, Method, Path, CModule, Action, Params2)
                     catch
                         Type : Reason ->
                             error_logger:error_report([
@@ -136,21 +136,21 @@ rest_method(Arg) ->
             end
     end.
 
-handle_request1(Arg, Method, Path, ControllerModule, Action, Params) ->
-    case ale_is_cached:is_cached(ControllerModule, page, Action) of
+handle_request1(Arg, Method, Path, CModule, Action, Params) ->
+    case ale_is_cached:is_cached(CModule, page, Action) of
         true ->
             Html = ale_cache:cache(Path, fun() ->
-                handle_request2(Arg, Method, Path, ControllerModule, Action, Params)
+                handle_request2(Arg, Method, Path, CModule, Action, Params)
             end),
             ale_pd:yaws(html, Html);
 
-        false -> handle_request2(Arg, Method, Path, ControllerModule, Action, Params)
+        false -> handle_request2(Arg, Method, Path, CModule, Action, Params)
     end.
 
 %% Returns:
 %% * HTML (converted to binary) if a view has been rendered (with or without layout)
 %% * undefined if there was no view or the request has been halted by a before action filter
-handle_request2(Arg, Method, Path, ControllerModule, Action, Params) ->
+handle_request2(Arg, Method, Path, CModule, Action, Params) ->
     % Set environment variables to the process dictionary here (not in
     % handle_request1 because they are not used there) because the application
     % may need these variables
@@ -176,7 +176,7 @@ handle_request2(Arg, Method, Path, ControllerModule, Action, Params) ->
     ),
 
     % Lastly put controller and action params
-    Controller = cm2c(ControllerModule),
+    Controller = cm2c(CModule),
     ale_pd:params("controller", Controller),
     ale_pd:params("action", Action),
 
@@ -184,24 +184,24 @@ handle_request2(Arg, Method, Path, ControllerModule, Action, Params) ->
     % may select another view
     ale_pd:view(Action),
 
-    case run_before_action(ControllerModule, Action) of
+    case run_before_action(CModule, Action) of
         true -> undefined;  % Can't be page cached because halted by a before action filter
 
         false ->
-            case ale_is_cached:is_cached(ControllerModule, action_with_layout, Action) of
+            case ale_is_cached:is_cached(CModule, action_with_layout, Action) of
                 true ->
                     Html = ale_cache:cache(Path, fun() ->
-                        handle_request3(Path, ControllerModule, Action)
+                        handle_request3(Path, CModule, Action)
                     end),
                     ale_pd:yaws(html, Html);    % Can't be page cached because action cached
 
-                false -> handle_request3(Path, ControllerModule, Action)
+                false -> handle_request3(Path, CModule, Action)
             end
     end.
 
 %% Returns HTML if there is a view to render, undefined otherwise.
-handle_request3(Path, ControllerModule, Action) ->
-    ActionCachedWithoutLayout = ale_is_cached:is_cached(ControllerModule, action_without_layout, Action),
+handle_request3(Path, CModule, Action) ->
+    ActionCachedWithoutLayout = ale_is_cached:is_cached(CModule, action_without_layout, Action),
     {ContentForLayout, FromCache} = case ActionCachedWithoutLayout of
         true ->
             % If taken from cache then it is binary or list:
@@ -209,7 +209,7 @@ handle_request3(Path, ControllerModule, Action) ->
             % [{content_for_layout, Binary} | Variables to be put to process dictionary for layout to use]
             % * If binary, it is content_for_layout
             case ale_cache:cache(Path) of
-                not_found -> {handle_request4(ControllerModule, Action), false};
+                not_found -> {handle_request4(CModule, Action), false};
 
                 {ok, BinaryOrList} ->
                     case is_binary(BinaryOrList) of
@@ -230,7 +230,7 @@ handle_request3(Path, ControllerModule, Action) ->
                     end
             end;
 
-        false -> {handle_request4(ControllerModule, Action), undefined}
+        false -> {handle_request4(CModule, Action), undefined}
     end,
 
     case ContentForLayout of
@@ -297,8 +297,8 @@ handle_request3(Path, ControllerModule, Action) ->
     end.
 
 %% Returns HTML if there is a view to render, undefined otherwise.
-handle_request4(ControllerModule, Action) ->
-    ActionCachedWithoutLayout = ale_is_cached:is_cached(ControllerModule, action_without_layout, Action),
+handle_request4(CModule, Action) ->
+    ActionCachedWithoutLayout = ale_is_cached:is_cached(CModule, action_without_layout, Action),
 
     % If the action is cached without layout, then variables introduced by this
     % action are remembered so that ale_pd:app/1 can cache them
@@ -307,7 +307,7 @@ handle_request4(ControllerModule, Action) ->
         true  -> ale_pd:keys(app)
     end,
 
-    ControllerModule:Action(),
+    CModule:Action(),
 
     case ale_pd:view_module() of
         undefined -> undefined;  % Layout is not called if there is no view
@@ -332,14 +332,17 @@ handle_request4(ControllerModule, Action) ->
 %-------------------------------------------------------------------------------
 
 %% Returns true if the action should be halted.
-run_before_action(ControllerModule, Action) ->
+run_before_action(CModule, Action) ->
     case erlang:function_exported(c_application, before_action, 2) andalso
-        c_application:before_action(ControllerModule, Action) of
+        c_application:before_action(CModule, Action) of
         true -> true;
 
         false ->
-            erlang:function_exported(ControllerModule, before_action, 1) andalso
-                ControllerModule:before_action(Action)
+            % FIXME
+            code:ensure_loaded(CModule),
+
+            erlang:function_exported(CModule, before_action, 1) andalso
+                CModule:before_action(Action)
     end.
 
 % FIXME
@@ -348,6 +351,6 @@ run_layout(LayoutModule) ->
     LayoutModule:render().
 
 %% Converts c_hello to hello.
-cm2c(ControllerModule) ->
-    [$c, $_ | ControllerS] = atom_to_list(ControllerModule),
+cm2c(CModule) ->
+    [$c, $_ | ControllerS] = atom_to_list(CModule),
     list_to_atom(ControllerS).
