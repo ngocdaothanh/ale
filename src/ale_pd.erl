@@ -1,11 +1,17 @@
-%% There is a process for each request.
-%%
-%% Yaws uses process dictionary. Some interesting things:
-%% * gc
-%% * sc
-%% * yaws_arg
-%%
-%% Ale also uses process dictionary.
+%%% There is a process for each request.
+%%%
+%%% Yaws uses process dictionary. Some interesting things:
+%%% * gc
+%%% * sc
+%%% * yaws_arg
+%%%
+%%% Ale also uses process dictionary in 3 namespaces:
+%%% * ale_yaws: used to return things directly to Yaws (the namespace is not
+%%%             just yaws to avoid potential conflict because Yaws also uses
+%%%             the same process dictionary)
+%%% * app:      used by the application
+%%% * ale:      used by Ale framework
+
 
 -module(ale_pd).
 
@@ -39,26 +45,22 @@ conf(SC, Namespace, Key, Value) ->
     ets:insert(T, {?KEY(Namespace, Key), Value}).
 
 %-------------------------------------------------------------------------------
-% There are 3 namespaces:
-% * yaws: used to return things directly to Yaws
-% * app:  used by the application
-% * ale:  used by Ale framework
 
 %% If Key is header, Value will be accumulated to avoid overwriting the existings.
 yaws(Key, Value) ->
     case Key of
         header ->
-            case erlang:get(?KEY(yaws, headers)) of
-                undefined -> erlang:put(?KEY(yaws, headers), [{header, Value}]);
-                Headers   -> erlang:put(?KEY(yaws, headers), Headers ++ [{header, Value}])
+            case erlang:get(?KEY(ale_yaws, headers)) of
+                undefined -> erlang:put(?KEY(ale_yaws, headers), [{header, Value}]);
+                Headers   -> erlang:put(?KEY(ale_yaws, headers), Headers ++ [{header, Value}])
             end;
 
-        _ -> erlang:put(?KEY(yaws, Key), Value)
+        _ -> erlang:put(?KEY(ale_yaws, Key), Value)
     end.
 
-yaws(Key, Value1, Value2)         -> erlang:put(?KEY(yaws, Key), {Value1, Value2}).
-yaws(Key, Value1, Value2, Value3) -> erlang:put(?KEY(yaws, Key), {Value1, Value2, Value3}).
-yaws(Key)                         -> erlang:get(?KEY(yaws, Key)).
+yaws(Key, Value1, Value2)         -> erlang:put(?KEY(ale_yaws, Key), {Value1, Value2}).
+yaws(Key, Value1, Value2, Value3) -> erlang:put(?KEY(ale_yaws, Key), {Value1, Value2, Value3}).
+yaws(Key)                         -> erlang:get(?KEY(ale_yaws, Key)).
 
 app(Key, Value) -> erlang:put(?KEY(app, Key), Value).
 
@@ -131,9 +133,9 @@ ale(Key)        -> erlang:get(?KEY(ale, Key)).
 
 %% Returns all variables for one type.
 %%%
-%% get(yaws) may be used to get the list to be sent to Yaws as the result of out/1.
+%% get(ale_yaws) may be used to get the list to be sent to Yaws as the result of out/1.
 %%
-%% Type: yaws | app | ale
+%% Type: ale_yaws | app | ale
 get(Type) ->
     lists:foldr(
         fun
@@ -144,7 +146,7 @@ get(Type) ->
                 [{Key, Value1, Value2} | Acc];
 
             ({{Type2, Key},  Value}, Acc) when Type2 == Type ->
-                case (Type == yaws) andalso (Key == headers) of
+                case (Type == ale_yaws) andalso (Key == headers) of
                     true  -> [Value | Acc];
                     false -> [{Key, Value} | Acc]
                 end;
@@ -157,7 +159,7 @@ get(Type) ->
 
 %% Returns all keys for one type.
 %%
-%% Type: yaws | app | ale
+%% Type: ale_yaws | app | ale
 keys(Type) ->
     lists:foldr(
         fun

@@ -71,7 +71,7 @@ out(Arg) ->
                             end
                     end
             end,
-            ale_pd:get(yaws)
+            ale_pd:get(ale_yaws)
     end.
 
 out404(_Arg, _GC, _SC) ->
@@ -80,7 +80,7 @@ out404(_Arg, _GC, _SC) ->
         undefined  -> ignore;
         ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
     end,
-    ale_pd:get(yaws).
+    ale_pd:get(ale_yaws).
 
 %-------------------------------------------------------------------------------
 
