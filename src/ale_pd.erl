@@ -27,22 +27,46 @@
 % application lifetime.
 
 conf(SC, Namespace, Key) when is_record(SC, sconf) ->
-    T = SC#sconf.ets,
-    case ets:lookup(T, ?KEY(Namespace, Key)) of
-        [{_NamespacedKey, Value}] -> Value;
-        _                         -> undefined
+    case SC of
+        undefined -> undefined;
+
+        _ ->
+            T = SC#sconf.ets,
+            case ets:lookup(T, ?KEY(Namespace, Key)) of
+                [{_NamespacedKey, Value}] -> Value;
+                _                         -> undefined
+            end
     end;
-conf(Namespace, Key, Value) ->
+conf(Namespace, Key, FunOrValue) ->
     SC = sc(),
-    conf(SC, Namespace, Key, Value).
+    conf(SC, Namespace, Key, FunOrValue).
 
 conf(Namespace, Key) ->
     SC = sc(),
     conf(SC, Namespace, Key).
 
-conf(SC, Namespace, Key, Value) ->
-    T = SC#sconf.ets,
-    ets:insert(T, {?KEY(Namespace, Key), Value}).
+conf(SC, Namespace, Key, FunOrValue) ->
+    case SC of
+        undefined ->
+            case is_function(FunOrValue) of
+                true  -> FunOrValue();
+                false -> FunOrValue
+            end;
+
+        _ ->
+            case conf(SC, Namespace, Key) of
+                undefined ->
+                    T = SC#sconf.ets,
+                    Value = case is_function(FunOrValue) of
+                        true  -> FunOrValue();
+                        false -> FunOrValue
+                    end,
+                    ets:insert(T, {?KEY(Namespace, Key), Value}),
+                    Value;
+
+                Value -> Value
+            end
+    end.
 
 %-------------------------------------------------------------------------------
 

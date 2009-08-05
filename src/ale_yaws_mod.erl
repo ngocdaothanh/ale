@@ -184,7 +184,7 @@ handle_request2(Arg, Method, Path, CModule, Action, Params) ->
     % may select another view
     ale_pd:view(Action),
 
-    case run_before_action(CModule, Action) of
+    case run_before_action(CModule) of
         true -> undefined;  % Can't be page cached because halted by a before action filter
 
         false ->
@@ -332,17 +332,17 @@ handle_request4(CModule, Action) ->
 %-------------------------------------------------------------------------------
 
 %% Returns true if the action should be halted.
-run_before_action(CModule, Action) ->
-    case erlang:function_exported(c_application, before_action, 2) andalso
-        c_application:before_action(CModule, Action) of
+run_before_action(CModule) ->
+    case erlang:function_exported(c_application, before_action, 0) andalso
+        c_application:before_action() of
         true -> true;
 
         false ->
             % FIXME
             code:ensure_loaded(CModule),
 
-            erlang:function_exported(CModule, before_action, 1) andalso
-                CModule:before_action(Action)
+            erlang:function_exported(CModule, before_action, 0) andalso
+                CModule:before_action()
     end.
 
 % FIXME

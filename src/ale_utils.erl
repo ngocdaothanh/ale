@@ -60,3 +60,42 @@ gravatar(Email, Size, Url) ->
     end,
     Src = io_lib:format("http://www.gravatar.com/avatar.php?size=~p&gravatar_id=~s", [Size, GravatarId]),
     {a, [{href, Url}], {img, [{src, Src}]}}.
+
+%-------------------------------------------------------------------------------
+
+%% Returns {Question, EcryptedAnswer}, both are io lists.
+%%
+%% Question: +, -, or x simple math question.
+mathcha() ->
+    case random:uniform(3) of
+        1 ->
+            O = " + ",
+            A = random:uniform(100),
+            B = random:uniform(100),
+            C = A + B;
+
+        2 ->
+            O = " - ",
+            A = random:uniform(100),
+            B = random:uniform(100),
+            C = A - B;
+
+        3 ->
+            O = " x ",
+            A = random:uniform(30),
+            B = random:uniform(30),
+            C = A*B
+    end,
+    Question = [integer_to_list(A), O, integer_to_list(B),  " = ?"],
+    Salt = mathcha_salt(),
+    EcryptedAnswer = md5_hex(erlang, [Salt, integer_to_list(C)]),
+    {Question, EcryptedAnswer}.
+
+%% Returns bool().
+mathcha(Answer, EcryptedAnswer) ->
+    Salt = mathcha_salt(),
+    EcryptedAnswer == md5_hex(erlang, [Salt, Answer]).
+
+mathcha_salt() ->
+    {H, _M, _S} = time(),
+    H.

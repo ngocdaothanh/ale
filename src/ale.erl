@@ -78,3 +78,6 @@ md5_hex(Module, Data) -> ale_utils:md5_hex(Module, Data).
 gravatar(Email)            -> ale_utils:gravatar(Email).
 gravatar(Email, Size)      -> ale_utils:gravatar(Email, Size).
 gravatar(Email, Size, Url) -> ale_utils:gravatar(Email, Size, Url).
+
+mathcha()                       -> ale_utils:mathcha().
+mathcha(Answer, EcryptedAnswer) -> ale_utils:mathcha(Answer, EcryptedAnswer).
