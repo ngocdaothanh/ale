@@ -102,7 +102,7 @@ app(Key) ->
                 IoList    -> IoList
             end;
 
-        % See app_add_script/1
+        % See app_add_js/1
         scripts ->
             case Value1 of
                 undefined -> "";
@@ -143,7 +143,7 @@ app_add_head(Head) ->
     end.
 
 %% Accumulates <script>. The scripts will be dumped right before </body> in layout.
-app_add_script(Script) ->
+app_add_js(Script) ->
     % Avoid calling app(scripts) because of the special cache handling right above
     case erlang:get(?KEY(app, scripts)) of
         undefined -> app(scripts, Script);

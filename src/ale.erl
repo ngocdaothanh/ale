@@ -24,10 +24,10 @@ yaws(Key)                         -> ale_pd:yaws(Key).
 
 %-------------------------------------------------------------------------------
 
-app(Key, Value)        -> ale_pd:app(Key, Value).
-app(Key)               -> ale_pd:app(Key).
-app_add_head(Head)     -> ale_pd:app_add_head(Head).
-app_add_script(Script) -> ale_pd:app_add_script(Script).
+app(Key, Value)    -> ale_pd:app(Key, Value).
+app(Key)           -> ale_pd:app(Key).
+app_add_head(Head) -> ale_pd:app_add_head(Head).
+app_add_js(Script) -> ale_pd:app_add_js(Script).
 
 %-------------------------------------------------------------------------------
 
