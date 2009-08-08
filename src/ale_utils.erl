@@ -67,6 +67,7 @@ gravatar(Email, Size, Url) ->
 %%
 %% Question: +, -, or x simple math question.
 mathcha() ->
+    random:seed(now()),
     case random:uniform(3) of
         1 ->
             O = " + ",
