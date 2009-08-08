@@ -79,5 +79,5 @@ gravatar(Email)            -> ale_utils:gravatar(Email).
 gravatar(Email, Size)      -> ale_utils:gravatar(Email, Size).
 gravatar(Email, Size, Url) -> ale_utils:gravatar(Email, Size, Url).
 
-mathcha()                       -> ale_utils:mathcha().
-mathcha(Answer, EcryptedAnswer) -> ale_utils:mathcha(Answer, EcryptedAnswer).
+mathcha()                        -> ale_utils:mathcha().
+mathcha(Answer, EncryptedAnswer) -> ale_utils:mathcha(Answer, EncryptedAnswer).

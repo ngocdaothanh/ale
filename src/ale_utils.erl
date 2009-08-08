@@ -92,9 +92,9 @@ mathcha() ->
     {Question, EcryptedAnswer}.
 
 %% Returns bool().
-mathcha(Answer, EcryptedAnswer) ->
+mathcha(Answer, EncryptedAnswer) ->
     Salt = mathcha_salt(),
-    EcryptedAnswer == md5_hex(erlang, [Salt, Answer]).
+    EncryptedAnswer == md5_hex(erlang, [Salt, Answer]).
 
 mathcha_salt() ->
     {H, _M, _S} = time(),
