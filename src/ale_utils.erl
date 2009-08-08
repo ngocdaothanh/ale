@@ -83,8 +83,8 @@ mathcha() ->
 
         3 ->
             O = " x ",
-            A = random:uniform(30),
-            B = random:uniform(30),
+            A = random:uniform(10),
+            B = random:uniform(10),
             C = A*B
     end,
     Question = [integer_to_list(A), O, integer_to_list(B),  " = ?"],
