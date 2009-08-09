@@ -89,13 +89,13 @@ mathcha() ->
     end,
     Question = [integer_to_list(A), O, integer_to_list(B),  " = ?"],
     Salt = mathcha_salt(),
-    EcryptedAnswer = md5_hex(erlang, [Salt, integer_to_list(C)]),
+    EcryptedAnswer = md5_hex(erlang, term_to_binary([Salt, integer_to_list(C)])),
     {Question, EcryptedAnswer}.
 
 %% Returns bool().
 mathcha(Answer, EncryptedAnswer) ->
     Salt = mathcha_salt(),
-    EncryptedAnswer == md5_hex(erlang, [Salt, Answer]).
+    EncryptedAnswer == md5_hex(erlang, term_to_binary([Salt, Answer])).
 
 mathcha_salt() ->
     {H, _M, _S} = time(),
