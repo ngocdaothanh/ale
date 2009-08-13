@@ -134,12 +134,18 @@ app(Key) ->
     end,
     Value2.
 
-%% Accumulates <head>. The heads will be dumped right before </body> in layout.
+%% Accumulates <head>. The heads will be dumped right before </head> in layout.
+%% If Head has already been added, it will not be accumulated twice.
 app_add_head(Head) ->
     % Avoid calling app(heads) because of the special cache handling right above
     case erlang:get(?KEY(app, heads)) of
-        undefined -> app(heads, Head);
-        IoList    -> app(heads, [IoList, Head])
+        undefined -> app(heads, [Head]);
+
+        List ->
+            case lists:member(Head, List) of
+                true  -> ok;
+                false -> app(heads, List ++ [Head])
+            end
     end.
 
 %% Accumulates <script>. The scripts will be dumped right before </body> in layout.
