@@ -106,13 +106,12 @@ start_children(SC) ->
 
 %% Called by start_children above.
 init(SC) ->
-    Nodes = ale_sc:nodes(SC),
     AppSpec = {
-        c_application, {c_application, start, [SC, Nodes]},
+        c_application, {c_application, start, [SC]},
         permanent, brutal_kill, worker, [c_application]
     },
     CacheSpec = {
-        ale_cache, {ale_cache, start_link, [SC, Nodes]},
+        ale_cache, {ale_cache, start_link, [SC]},
         permanent, brutal_kill, worker, [ale_cache]
     },
     {ok, {{one_for_one, ?MAX_R, ?MAX_T}, [AppSpec, CacheSpec]}}.

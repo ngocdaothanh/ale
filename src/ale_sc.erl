@@ -42,10 +42,3 @@ xtra_docroots(Dirs, Acc) ->
         Acc,
         Dirs
     ).
-
-%-------------------------------------------------------------------------------
-
-nodes(SC) ->
-    Nodes1 = proplists:get_value("nodes", SC#sconf.opaque),
-    Nodes2 = string:tokens(Nodes1, ":"),
-    [list_to_atom(Node) || Node <- Nodes2].

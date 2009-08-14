@@ -20,7 +20,7 @@
 
 -include("ale.hrl").
 
-start_link(SC, _Nodes) ->
+start_link(SC) ->
     case proplists:get_value("cache", SC#sconf.opaque) of
         undefined -> ignore;
 
