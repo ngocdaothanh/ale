@@ -231,6 +231,7 @@ ip() ->
     Ip.
 
 %% Key: string().
+params(_Key, undefined) -> ok;
 params(Key, Value) ->
     % For check boxes etc. there may be multiple values for a single key
     Value2 = case erlang:get(?KEY(params, Key)) of
