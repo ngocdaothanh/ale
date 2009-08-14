@@ -237,9 +237,12 @@ params(Key, Value) -> erlang:put(?KEY(params, Key), Value).
 %% strings, but for application development covenience, they can be accessed as
 %% atoms.
 %%
-%% Key: atom()
-params(Key)  ->
-    KeyS = atom_to_list(Key),
+%% Key: atom() or list()
+params(Key) ->
+    KeyS = case is_atom(Key) of
+        true  -> atom_to_list(Key);
+        false -> Key
+    end,
     erlang:get(?KEY(params, KeyS)).
 
 %-------------------------------------------------------------------------------
