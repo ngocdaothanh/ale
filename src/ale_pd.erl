@@ -231,13 +231,24 @@ ip() ->
     Ip.
 
 %% Key: string().
-params(Key, Value) -> erlang:put(?KEY(params, Key), Value).
+params(Key, Value) ->
+    % For check boxes etc. there may be multiple values for a single key
+    Value2 = case erlang:get(?KEY(params, Key)) of
+        undefined -> Value;
+
+        Value3 ->
+            case is_list(hd(Value3)) of
+                true  -> Value3 ++ [Value];
+                false -> [Value3, Value]
+            end
+    end,
+    erlang:put(?KEY(params, Key), Value2).
 
 %% To prevent list_to_atom attack, keys of params in the process dictionary are
 %% strings, but for application development covenience, they can be accessed as
 %% atoms.
 %%
-%% Key: atom() or list()
+%% Key: atom() or string()
 params(Key) ->
     KeyS = case is_atom(Key) of
         true  -> atom_to_list(Key);
