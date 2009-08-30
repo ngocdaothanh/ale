@@ -21,7 +21,7 @@ start(SC) ->
 % * Pages are not cached to files on disk (then let Yaws handle the files). They
 %   are cached in memory the same way as actions, fragments, and objects for 2
 %   reasons: (1) memory caching as Yaws file caching are the same speed
-%   (normally ~3000req/s), (2) functionalities like auto expiration 
+%   (normally ~3000req/s), (2) functionalities like auto expiration
 
 % FIXME: currently cache only works if there is a view to render
 
@@ -40,12 +40,8 @@ out(Arg) ->
         _ ->
             Method = rest_method(Arg),
             case ale_routes:route_path(Method, Path) of
-                no_route ->
-                    c_application:error_404(),
-                    case ale_pd:view_module() of
-                        undefined  -> ignore;
-                        ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
-                    end;
+                % Give Yaws another chance to server static file like /robots.txt, /favicon.ico etc.
+                no_route -> {page, Path};
 
                 {CModule, Action, Params} ->
                     try
@@ -69,9 +65,9 @@ out(Arg) ->
                                 undefined  -> ignore;
                                 ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
                             end
-                    end
-            end,
-            ale_pd:get(ale_yaws)
+                    end,
+                    ale_pd:get(ale_yaws)
+            end
     end.
 
 out404(_Arg, _GC, _SC) ->
