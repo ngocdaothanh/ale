@@ -61,7 +61,7 @@ out(Arg) ->
                             % Type and Reason are more convenient than those
                             % arguments of Yaws' errormod_crash
                             ale:yaws(status, 500),
-                            c_application:error_500(Type, Reason),
+                            c_app:error_500(Type, Reason),
                             case ale_pd:view_module() of
                                 undefined -> ok;
 
@@ -78,7 +78,7 @@ out(Arg) ->
 
 out404(_Arg, _GC, _SC) ->
     ale:yaws(status, 404),
-    c_application:error_404(),
+    c_app:error_404(),
     case ale_pd:view_module() of
         undefined  -> ok;
 
@@ -115,8 +115,8 @@ start_children(SC) ->
 %% Called by start_children above.
 init(SC) ->
     AppSpec = {
-        c_application, {c_application, start, [SC]},
-        permanent, brutal_kill, worker, [c_application]
+        c_app, {c_app, start, [SC]},
+        permanent, brutal_kill, worker, [c_app]
     },
     CacheSpec = {
         ale_cache, {ale_cache, start_link, [SC]},
@@ -350,8 +350,8 @@ handle_request4(CModule, Action) ->
 
 %% Returns true if the action should be halted.
 run_before_action(CModule) ->
-    case erlang:function_exported(c_application, before_action, 0) andalso
-        c_application:before_action() of
+    case erlang:function_exported(c_app, before_action, 0) andalso
+        c_app:before_action() of
         true -> true;
 
         false ->
@@ -362,9 +362,9 @@ run_before_action(CModule) ->
                 CModule:before_action()
     end.
 
-% FIXME
 run_layout(LayoutModule) ->
-    h_facebook:before_layout(),
+    % FIXME
+    %h_facebook:before_layout(),
     LayoutModule:render().
 
 %% Converts c_hello to hello.
