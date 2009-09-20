@@ -42,10 +42,10 @@ params(Key) -> ale_pd:params(Key).
 schema_host_port(Path) -> ale_pd:schema_host_port(Path).
 ip()                   -> ale_pd:ip().
 
-layout_module(Module)    -> ale_pd:layout_module(Module).
-view(Action)             -> ale_pd:view(Action).
-view(Controller, Action) -> ale_pd:view(Controller, Action).
-view_module(Module)      -> ale_pd:view_module(Module).
+layout_module(Module)        -> ale_pd:layout_module(Module).
+view_module(Module)          -> ale_pd:view_module(Module).
+view(Controller, Action)     -> ale_pd:view(Controller, Action).
+view(ActionOrBinaryOrIoList) -> ale_pd:view(ActionOrBinaryOrIoList).
 
 %-------------------------------------------------------------------------------
 

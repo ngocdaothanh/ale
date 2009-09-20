@@ -60,10 +60,16 @@ out(Arg) ->
 
                             % Type and Reason are more convenient than those
                             % arguments of Yaws' errormod_crash
+                            ale:yaws(status, 500),
                             c_application:error_500(Type, Reason),
                             case ale_pd:view_module() of
-                                undefined  -> ignore;
-                                ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
+                                undefined -> ok;
+
+                                VModuleOrBinaryOrIoList ->
+                                    case is_atom(VModuleOrBinaryOrIoList) of
+                                        true  -> ale_pd:yaws(ehtml, VModuleOrBinaryOrIoList:render());
+                                        false -> ale_pd:yaws(html, VModuleOrBinaryOrIoList)
+                                    end
                             end
                     end,
                     ale_pd:get(ale_yaws)
@@ -71,10 +77,16 @@ out(Arg) ->
     end.
 
 out404(_Arg, _GC, _SC) ->
+    ale:yaws(status, 404),
     c_application:error_404(),
     case ale_pd:view_module() of
-        undefined  -> ignore;
-        ViewModule -> ale_pd:yaws(ehtml, ViewModule:render())
+        undefined  -> ok;
+
+        VModuleOrBinaryOrIoList ->
+            case is_atom(VModuleOrBinaryOrIoList) of
+                true  -> ale_pd:yaws(ehtml, VModuleOrBinaryOrIoList:render());
+                false -> ale_pd:yaws(html, VModuleOrBinaryOrIoList)
+            end
     end,
     ale_pd:get(ale_yaws).
 
@@ -307,21 +319,31 @@ handle_request4(CModule, Action) ->
     case ale_pd:view_module() of
         undefined -> undefined;  % Layout is not called if there is no view
 
-        ViewModule ->
-            Ehtml = ViewModule:render(),
-            case ActionCachedWithoutLayout of
-                false -> ok;
-
+        % Because the result may be cached, we convert EHTML to HTML (io list)
+        % then to binary for efficiency
+        VModuleOrBinaryOrIoList ->
+            case is_atom(VModuleOrBinaryOrIoList) of
                 true ->
-                    Keys2 = ale_pd:keys(app),
-                    ActionKeys = Keys2 -- Keys1,
-                    ale_pd:ale(action_keys, ActionKeys)
-            end,
+                    Ehtml = VModuleOrBinaryOrIoList:render(),
 
-            % Because the result may be cached, we convert EHTML to HTML (io list)
-            % then to binary for efficiency
-            Html = yaws_api:ehtml_expand(Ehtml),
-            list_to_binary(Html)
+                    case ActionCachedWithoutLayout of
+                        false -> ok;
+
+                        true ->
+                            Keys2 = ale_pd:keys(app),
+                            ActionKeys = Keys2 -- Keys1,
+                            ale_pd:ale(action_keys, ActionKeys)
+                    end,
+
+                    Html = yaws_api:ehtml_expand(Ehtml),
+                    list_to_binary(Html);
+
+                false ->
+                    case is_binary(VModuleOrBinaryOrIoList) of
+                        true  -> VModuleOrBinaryOrIoList;
+                        false -> list_to_binary(VModuleOrBinaryOrIoList)
+                    end
+            end
     end.
 
 %-------------------------------------------------------------------------------

@@ -12,7 +12,6 @@
 %%% * app:      used by the application
 %%% * ale:      used by Ale framework
 
-
 -module(ale_pd).
 
 -compile(export_all).
@@ -226,7 +225,7 @@ ip() ->
     Peer = case is_tuple(Sock) andalso (element(1, Sock) == sslsocket) of
         true -> ssl:peername(Sock);
         _    -> inet:peername(Sock)
-    end, 
+    end,
     {ok, {Ip, _Port}} = Peer,
     Ip.
 
@@ -262,19 +261,7 @@ params(Key) ->
 layout_module(Module) -> ale(layout_module, Module).
 layout_module()       -> ale(layout_module).
 
-view(Action) ->
-    case Action of
-        undefined -> view_module(undefined);
-
-        _ ->
-            Controller = ale_pd:params(controller),
-            view(Controller, Action)
-    end.
-
-view(Controller, Action) ->
-    ViewModule = list_to_atom("v_" ++ atom_to_list(Controller) ++ "_" ++ atom_to_list(Action)),
-    ale_pd:ale(view_module, ViewModule).
-
+%% View module must have function render/0 which returns EHTML.
 view_module(Module) ->
     case Module of
         undefined -> erlang:erase(?KEY(ale, view_module));
@@ -282,3 +269,20 @@ view_module(Module) ->
     end.
 
 view_module() -> ale(view_module).
+
+view(Controller, Action) ->
+    Module = list_to_atom("v_" ++ atom_to_list(Controller) ++ "_" ++ atom_to_list(Action)),
+    ale_pd:ale(view_module, Module).
+
+%% Controller: current controller.
+view(Action) when is_atom(Action) ->
+    case Action of
+        undefined -> view_module(undefined);
+
+        _ ->
+            Controller = ale_pd:params(controller),
+            view(Controller, Action)
+    end;
+
+%% BinaryOrIoList is used in place for a view.
+view(BinaryOrIoList) -> view_module(BinaryOrIoList).
