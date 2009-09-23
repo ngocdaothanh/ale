@@ -1,7 +1,7 @@
 -include_lib("yaws/include/yaws.hrl").
 -include_lib("yaws/include/yaws_api.hrl").
 
--define(D(Var), error_logger:info_msg("DEBUG: ~p:~p - ~p: ~p~n", [?MODULE, ?LINE, ??Var, Var])).
+-define(D(Var), log4erl:debug("~p:~p - ~p: ~p~n", [?MODULE, ?LINE, ??Var, Var])).
 
 -define(T(S), ale_i18n:t(S)).                              % i18n
 -define(TF(S, Data), io_lib:format(ale_i18n:t(S), Data)).  % i18n with format
