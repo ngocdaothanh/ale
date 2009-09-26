@@ -192,9 +192,9 @@ handle_request2(Arg, Method, Path, CModule, Action, Params) ->
     ale_pd:view(Action),
 
     case run_before_action(CModule) of
-        true -> undefined;  % Can't be page cached because halted by a before action filter
+        false -> undefined;  % Can't be page cached because halted by a before action filter
 
-        false ->
+        true ->
             case ale_is_cached:is_cached(CModule, action_with_layout, Action) of
                 true ->
                     Html = ale_cache:cache(Path, fun() ->
@@ -348,18 +348,19 @@ handle_request4(CModule, Action) ->
 
 %-------------------------------------------------------------------------------
 
-%% Returns true if the action should be halted.
+%% Returns true if the action should be continued.
 run_before_action(CModule) ->
-    case erlang:function_exported(c_app, before_action, 0) andalso
-        c_app:before_action() of
-        true -> true;
+    % FIXME
+    code:ensure_loaded(CModule),
+
+    case erlang:function_exported(c_app, before_action, 0) andalso (not c_app:before_action()) of
+        true -> false;
 
         false ->
-            % FIXME
-            code:ensure_loaded(CModule),
-
-            erlang:function_exported(CModule, before_action, 0) andalso
-                CModule:before_action()
+            case erlang:function_exported(CModule, before_action, 0) andalso (not CModule:before_action()) of
+                true  -> false;
+                false -> true
+            end
     end.
 
 run_layout(LayoutModule) ->
