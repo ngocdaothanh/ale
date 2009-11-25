@@ -117,7 +117,7 @@ value(Fun, Options) ->
 cache_module() ->
     case ale_pd:conf(ale, cache_module) of
         undefined ->
-            log4erl:error("Cache Not Configured"),
+            log4erl:warn("Cache Not Configured"),
             undefined;
 
         Module -> Module
